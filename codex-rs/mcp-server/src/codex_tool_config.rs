@@ -234,6 +234,8 @@ pub(crate) fn create_tool_for_codex_tool_call_reply_param() -> Tool {
     }
 }
 
+use crate::message_processor::DEFAULT_GET_RESPONSE_TIMEOUT_SECS;
+
 /// Parameters for the Codex get-response tool-call.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -241,7 +243,7 @@ pub struct CodexToolCallGetResponseParam {
     /// Session ID to retrieve response from
     pub session_id: String,
     
-    /// Optional timeout in seconds to wait for response (defaults to 300)
+    /// Optional timeout in seconds to wait for response
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout: Option<u64>,
 }
@@ -273,9 +275,11 @@ pub(crate) fn create_tool_for_codex_tool_call_get_response_param() -> Tool {
         title: Some("Codex Get Response".to_string()),
         input_schema: tool_input_schema,
         output_schema: None,
-        description: Some(
-            "Retrieve the response from a completed or running Codex session.".to_string(),
-        ),
+        description: Some(format!(
+            "Retrieve the response from a completed or running Codex session. IMPORTANT: Omit timeout parameter to use default ({} seconds). Only specify timeout if you need MORE than {} seconds. Short timeouts WILL cause failures.",
+            DEFAULT_GET_RESPONSE_TIMEOUT_SECS,
+            DEFAULT_GET_RESPONSE_TIMEOUT_SECS
+        )),
         annotations: None,
     }
 }

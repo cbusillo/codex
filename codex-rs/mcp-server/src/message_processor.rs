@@ -2,6 +2,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Default timeout for codex-get-response tool (10 minutes)
+/// GPT-5 research tasks can take 5+ minutes to complete thorough analysis,
+/// so 600s provides adequate buffer while still catching truly stuck sessions.
+pub const DEFAULT_GET_RESPONSE_TIMEOUT_SECS: u64 = 600;
+
 use crate::codex_message_processor::CodexMessageProcessor;
 use crate::session_storage::{SessionResponse, SessionResponseStorage, SessionStatus};
 use crate::codex_tool_config::CodexToolCallParam;
@@ -828,9 +833,6 @@ impl MessageProcessor {
     }
 
     /// Handle the codex-get-response tool call.
-    ///
-    /// Retrieves the response from a completed or running Codex session in compatibility mode.
-    /// Supports polling with configurable timeout (defaults to 300 seconds).
     async fn handle_tool_call_codex_get_response(
         &self,
         id: RequestId,
@@ -886,7 +888,7 @@ impl MessageProcessor {
             }
         };
 
-        let timeout_duration = Duration::from_secs(params.timeout.unwrap_or(300)); // Default 5 minutes
+        let timeout_duration = Duration::from_secs(params.timeout.unwrap_or(DEFAULT_GET_RESPONSE_TIMEOUT_SECS));
         let start_time = std::time::Instant::now();
 
         // Poll for response with timeout
