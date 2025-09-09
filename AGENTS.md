@@ -64,3 +64,49 @@ If you don’t have the tool:
 ### Test assertions
 
 - Tests should use pretty_assertions::assert_eq for clearer diffs. Import this at the top of the test module if it isn't already.
+
+---
+
+## Fork Branches (local repo)
+
+- `main`: fast‑forward mirror of `openai/codex:main`. No direct commits.
+- `fix-mcp-session-id-response`: long‑lived fork branch for our minimal changes and releases.
+- `pr/compat-mode`: PR staging branch; default‑off compatibility mode for clients that do not consume async notifications. Do not include fork‑only files here.
+
+## Automation & Releases (fork)
+
+- Nightly workflows (UTC):
+  - `fork-sync` (03:17): fast‑forwards (or rebases when needed) `main` from `upstream/main`, then pushes to our fork. Preserves `.github/workflows`.
+  - `rebase-branches` (03:29): rebases `fix-mcp-session-id-response` and `pr/compat-mode` onto `main`. On conflicts, an issue is opened with exact commands to resolve.
+  - `fork-release-tracker` (03:41): polls upstream tags (stable + prerelease). For each new base `X.Y.Z`, if no fork tag exists, bumps `codex-rs/Cargo.toml` on `fix-mcp-session-id-response` to `X.Y.Z-alpha.YYYYMMDD`, tags `rust-vX.Y.Z-alpha.YYYYMMDD`, and pushes to trigger our `rust-release` workflow.
+- Required secret: `SYNC_TOKEN` (PAT with `contents:write`, `pull_requests:write`). Actions → General → Workflow permissions must be “Read and write.”
+- Manual triggers (either UI or CLI):
+  - `gh workflow run fork-sync`
+  - `gh workflow run rebase-branches`
+  - `gh workflow run fork-release-tracker`
+
+## PR Guidance (upstream)
+
+- Scope: default‑off “compatibility mode.” When enabled:
+  - `codex` returns an immediate response with a sessionId.
+  - `codex-reply` returns immediately; background processing continues.
+  - `codex-get-response` is advertised and can fetch the final/failed content. It is only listed when compatibility mode is on.
+- Normal mode remains unchanged. Tests must cover compat‑on and compat‑off.
+- Capabilities: only advertise the extra tool when the flag is on.
+- Avoid naming specific third‑party products in PR text.
+- Exclude fork‑only files (e.g., this AGENTS.md) from PR branches.
+
+## Manual Release (when needed)
+
+From `fix-mcp-session-id-response`:
+
+1) Set `[workspace.package].version` in `codex-rs/Cargo.toml` to `X.Y.Z-alpha.YYYYMMDD`.
+2) `git commit -m "Release X.Y.Z-alpha.YYYYMMDD"`
+3) `git tag -a rust-vX.Y.Z-alpha.YYYYMMDD -m "Release X.Y.Z-alpha.YYYYMMDD" && git push origin refs/tags/rust-vX.Y.Z-alpha.YYYYMMDD`
+4) Watch Actions → `rust-release`; verify artifacts under Releases.
+
+## Next Session Checklist
+
+- If upstream moved: automation will sync nightly; if an issue about rebase conflicts appears, follow the commands and push with `--force-with-lease`.
+- Fork development: work on `fix-mcp-session-id-response`. Build with `cargo build --workspace --release`. For compat testing: `cargo run -p codex-mcp-server -- --compatibility-mode`.
+- Upstream PRs: base from `pr/compat-mode`, keep changes default‑off and capability‑gated, tests green, and no fork‑only files.
