@@ -1,0 +1,115 @@
+name: fork-release-tracker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 3 * * *"  # nightly after sync/rebase
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: fork-release-tracker
+  cancel-in-progress: true
+
+jobs:
+  derive-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork (full history)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Configure git user
+        run: |
+          git config user.name  "codex-fork-bot"
+          git config user.email "codex-fork-bot@users.noreply.github.com"
+
+      - name: Add upstream and fetch tags
+        run: |
+          git remote add upstream https://github.com/openai/codex.git || git remote set-url upstream https://github.com/openai/codex.git
+          git fetch upstream --tags --prune
+
+      - name: Determine latest upstream release tag (stable or prerelease)
+        id: latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Find latest rust-vX.Y.Z or rust-vX.Y.Z-(alpha|beta).N tag by version order
+          LATEST=$(git ls-remote --tags --sort="-version:refname" upstream 'refs/tags/rust-v*' \
+            | awk '{print $2}' | sed 's#refs/tags/##' \
+            | grep -E '^rust-v[0-9]+\.[0-9]+\.[0-9]+(-((alpha|beta)(\.[0-9]+)?))?$' \
+            | head -n1)
+          if [ -z "$LATEST" ]; then
+            echo "::notice::No upstream stable tags found; skipping"; exit 0; fi
+          echo "up_tag=$LATEST" >> "$GITHUB_OUTPUT"
+          # Extract X.Y.Z (strip prerelease if present)
+          BASE=${LATEST#rust-v}
+          BASE=${BASE%%-*}
+          echo "base_ver=$BASE" >> "$GITHUB_OUTPUT"
+
+      - name: Decide fork version and check if already released
+        id: decide
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ steps.latest.outputs.up_tag }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          BASE="${{ steps.latest.outputs.base_ver }}"
+          TODAY=$(date -u +%Y%m%d)
+          FORK_VER="${BASE}-alpha.${TODAY}"
+          TAG="rust-v${FORK_VER}"
+          # Skip if we already have any fork tag for this BASE (avoid retagging daily)
+          if git tag -l "rust-v${BASE}-alpha.*" | grep -q .; then
+            echo "::notice::Fork release for ${BASE} already exists; skipping";
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # Also skip if tag exists (idempotency)
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::notice::Tag ${TAG} already exists; skipping";
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "fork_ver=${FORK_VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump Cargo version on long-runner
+        if: steps.decide.outputs.skip == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BR="fix-mcp-session-id-response"
+          git fetch origin "$BR"
+          git checkout -B "$BR" "origin/$BR"
+          VER="${{ steps.decide.outputs.fork_ver }}"
+          # Update [workspace.package] version line
+          python3 - << 'PY'
+import re, os
+p='codex-rs/Cargo.toml'
+s=open(p).read()
+ver=os.environ['VER']
+news=re.sub(r"(\[workspace\.package\][\s\S]*?\n)version = \"[^\"]+\"",
+            lambda m: m.group(1)+f'version = "{ver}"', s, count=1)
+open(p,'w').write(news)
+PY
+          git add codex-rs/Cargo.toml
+          git commit -m "Release ${VER}" || echo "Nothing to commit"
+
+      - name: Create and push tag to trigger release
+        if: steps.decide.outputs.skip == 'false'
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          TAG="${{ steps.decide.outputs.tag }}"
+          VER="${{ steps.decide.outputs.fork_ver }}"
+          git tag -a "$TAG" -m "Release ${VER}" || true
+          git push https://x-access-token:${SYNC_TOKEN}@github.com/${{ github.repository }}.git "refs/tags/${TAG}"
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.decide.outputs.skip }}" = "true" ]; then
+            echo "No release created (either already exists or no upstream tag)."
+          else
+            echo "Tagged ${{ steps.decide.outputs.tag }} to trigger release."
+          fi

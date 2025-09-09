@@ -1,0 +1,84 @@
+name: fork-sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"  # nightly sync at 03:17 UTC
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: fork-sync-main
+  cancel-in-progress: true
+
+jobs:
+  sync-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork (full history)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Configure git user
+        run: |
+          git config user.name  "codex-fork-bot"
+          git config user.email "codex-fork-bot@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch (with retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/openai/codex.git || git remote set-url upstream https://github.com/openai/codex.git
+          n=0
+          until [ $n -ge 3 ]; do
+            if git fetch upstream --tags --prune; then
+              break
+            fi
+            n=$((n+1))
+            echo "Fetch failed, retry $n/3 after short delay..." >&2
+            sleep 5
+          done
+          git remote -v
+
+      - name: Fast-forward or rebase main from upstream/main
+        id: sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout main
+          # Detect if fast-forward is needed
+          UP=$(git rev-parse --verify refs/remotes/upstream/main)
+          CUR=$(git rev-parse --verify HEAD)
+          if [ "$UP" = "$CUR" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Attempt fast-forward only
+          if git merge --ff-only upstream/main; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Cannot fast-forward main (diverged). Attempting rebase to preserve fork-only commits (e.g., workflows)."
+            # Rebase our fork-only commits (e.g., .github/workflows) atop upstream/main
+            git rebase --rebase-merges upstream/main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push updated main
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          # Push using PAT to ensure downstream workflows trigger
+          git push --force-with-lease https://x-access-token:${SYNC_TOKEN}@github.com/${{ github.repository }}.git main
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.sync.outputs.changed }}" = "true" ]; then
+            echo "Fork main fast-forwarded to upstream/main and pushed."
+          else
+            echo "No changes. main already matches upstream/main."
+          fi

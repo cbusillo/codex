@@ -1,0 +1,99 @@
+name: rebase-branches
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "29 3 * * *"  # nightly after fork-sync
+  workflow_run:
+    workflows: [fork-sync]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: rebase-branches
+  cancel-in-progress: true
+
+jobs:
+  rebase:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [ "fix-mcp-session-id-response", "pr/compat-mode" ]
+    steps:
+      - name: Checkout fork (full history)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Configure git user
+        run: |
+          git config user.name  "codex-fork-bot"
+          git config user.email "codex-fork-bot@users.noreply.github.com"
+
+      - name: Fetch and rebase ${{ matrix.branch }} onto origin/main
+        id: rebase
+        env:
+          BR: ${{ matrix.branch }}
+        run: |
+          set -euo pipefail
+          git fetch origin --prune
+          # Ensure main is current
+          git checkout main
+          git reset --hard origin/main
+
+          # Rebase the branch onto main
+          if git show-ref --verify --quiet "refs/heads/$BR"; then
+            git checkout "$BR"
+          else
+            echo "Branch $BR not found locally; skipping"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch origin "$BR":"$BR" || true
+          if git rebase --rebase-merges --autostash origin/main; then
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+            echo "rebased=true" >> "$GITHUB_OUTPUT"
+          else
+            # Abort and report
+            git rebase --abort || true
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+            echo "rebased=false" >> "$GITHUB_OUTPUT"
+            exit 10
+          fi
+
+      - name: Push rebased branch
+        if: steps.rebase.outputs.rebased == 'true'
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+          BR: ${{ matrix.branch }}
+        run: |
+          git push --force-with-lease https://x-access-token:${SYNC_TOKEN}@github.com/${{ github.repository }}.git "$BR"
+
+      - name: Report rebase conflict as issue
+        if: failure() && steps.rebase.outputs.skipped != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.SYNC_TOKEN }}
+          script: |
+            const branch = process.env.BRANCH || context.payload?.inputs?.branch || '${{ matrix.branch }}';
+            const title = `Rebase needed for ${branch}`;
+            const body = `Automated rebase of \
+            \`${branch}\` onto \`main\` failed due to conflicts.\n\nPlease resolve locally:\n\n\n
+            \`\`\`bash\n
+            git fetch origin &&\n
+            git checkout ${branch} &&\n
+            git rebase origin/main\n\n\`\`\`\n\nThen force-push the branch.\n`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['automation', 'rebase-needed']
+            })
+
