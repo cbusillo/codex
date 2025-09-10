@@ -33,15 +33,19 @@ jobs:
         run: |
           set -euo pipefail
           git remote add upstream https://github.com/openai/codex.git || git remote set-url upstream https://github.com/openai/codex.git
-          n=0
-          until [ $n -ge 3 ]; do
-            if git fetch upstream --tags --prune; then
+          echo "Fetching upstream/main with retries…" >&2
+          for i in 1 2 3; do
+            if git fetch --no-tags upstream +refs/heads/main:refs/remotes/upstream/main; then
               break
             fi
-            n=$((n+1))
-            echo "Fetch failed, retry $n/3 after short delay..." >&2
+            echo "::warning::Fetch attempt $i failed; retrying in 5s…" >&2
             sleep 5
           done
+          # Verify the ref is present; fail early if not
+          if ! git show-ref -q --verify refs/remotes/upstream/main; then
+            echo "::error::upstream/main not fetched after 3 attempts" >&2
+            exit 1
+          fi
           git remote -v
 
       - name: Fast-forward or rebase main from upstream/main
@@ -49,7 +53,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git checkout main
+          # Ensure local main tracks origin/main
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git checkout -B main origin/main
           # Detect if fast-forward is needed
           UP=$(git rev-parse --verify refs/remotes/upstream/main)
           CUR=$(git rev-parse --verify HEAD)
