@@ -78,8 +78,26 @@ jobs:
         env:
           SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
         run: |
-          # Push using PAT to ensure downstream workflows trigger
-          git push --force-with-lease https://x-access-token:${SYNC_TOKEN}@github.com/${{ github.repository }}.git main
+          set -euo pipefail
+          # Capture the lease against current remote main we based on
+          LEASE=$(git rev-parse --verify refs/remotes/origin/main || echo "")
+          echo "Pushing with lease against origin/main=${LEASE}"
+          PUSH_URL="https://x-access-token:${SYNC_TOKEN}@github.com/${{ github.repository }}.git"
+
+          if ! git push --force-with-lease=refs/heads/main:${LEASE:-0000000000000000000000000000000000000000} "$PUSH_URL" main; then
+            echo "::warning::Push rejected due to stale lease. Refetching origin/main and reapplying sync…"
+            # Refresh origin/main and reapply fast-forward/rebase, then push again once
+            git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+            git checkout -B main origin/main
+            if git merge --ff-only upstream/main; then
+              :
+            else
+              git rebase --rebase-merges upstream/main
+            fi
+            LEASE=$(git rev-parse --verify refs/remotes/origin/main || echo "")
+            echo "Retrying push with updated lease origin/main=${LEASE}"
+            git push --force-with-lease=refs/heads/main:${LEASE:-0000000000000000000000000000000000000000} "$PUSH_URL" main
+          fi
 
       - name: Summary
         run: |
