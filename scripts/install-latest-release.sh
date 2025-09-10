@@ -5,16 +5,12 @@ set -euo pipefail
 # Defaults:
 #   REPO=cbusillo/codex
 #   TARGET=auto-detect (host OS/arch)
-#   DEST=/usr/local/bin/codex
+#   DEST=auto-detect (Homebrew on macOS; /usr/local/bin elsewhere)
 #
 # Usage:
 #   scripts/install-latest-release.sh [--repo OWNER/REPO] [--tag TAG]
 #                                     [--target TRIPLE] [--dest PATH]
 #                                     [--no-sudo] [--dry-run]
-# Examples:
-#   scripts/install-latest-release.sh
-#   scripts/install-latest-release.sh --tag rust-v0.32.0-alpha.20250910
-#   scripts/install-latest-release.sh --dest "$HOME/.local/bin/codex" --no-sudo
 
 REPO="cbusillo/codex"
 TAG=""
@@ -34,9 +30,7 @@ while [[ $# -gt 0 ]]; do
     --dest) DEST=${2-}; shift 2;;
     --no-sudo) USE_SUDO=0; shift;;
     --dry-run) DRY_RUN=1; shift;;
-    -h|--help)
-      sed -n '1,60p' "$0" | sed -n '1,40p' | sed -n '1,40p' # header
-      exit 0;;
+    -h|--help) sed -n '1,40p' "$0"; exit 0;;
     *) die "unknown arg: $1";;
   esac
 done
@@ -44,51 +38,46 @@ done
 command -v gh >/dev/null || die "gh (GitHub CLI) is required"
 command -v jq >/dev/null || die "jq is required"
 
-# Auto-detect target triple and default DEST if not supplied
+# Detect target triple if not supplied
 if [[ -z "$TARGET" ]]; then
-  uname_s=$(uname -s)
-  uname_m=$(uname -m)
-  case "$uname_s" in
+  os=$(uname -s)
+  arch=$(uname -m)
+  case "$os" in
     Darwin)
-      case "$uname_m" in
+      case "$arch" in
         arm64) TARGET="aarch64-apple-darwin";;
         x86_64) TARGET="x86_64-apple-darwin";;
-        *) die "unsupported macOS arch: $uname_m";;
+        *) die "unsupported macOS arch: $arch";;
       esac;;
     Linux)
-      case "$uname_m" in
+      case "$arch" in
         x86_64) TARGET="x86_64-unknown-linux-gnu";;
         aarch64) TARGET="aarch64-unknown-linux-gnu";;
-        *) die "unsupported Linux arch: $uname_m";;
+        *) die "unsupported Linux arch: $arch";;
       esac;;
     MINGW*|MSYS*|CYGWIN*)
-      case "$uname_m" in
+      case "$arch" in
         x86_64) TARGET="x86_64-pc-windows-msvc";;
         aarch64|arm64) TARGET="aarch64-pc-windows-msvc";;
-        *) die "unsupported Windows arch: $uname_m";;
+        *) die "unsupported Windows arch: $arch";;
       esac;;
-    *) die "unsupported OS: $uname_s";;
+    *) die "unsupported OS: $os";;
   esac
 fi
 
-# Default install destination by platform if not provided
-if [[ -z "${DEST}" ]]; then
+# Default install destination
+if [[ -z "$DEST" ]]; then
   case "$(uname -s)" in
     Darwin)
       if command -v brew >/dev/null 2>&1; then
-        BREW_PREFIX=$(brew --prefix 2>/dev/null || true)
-        if [[ -n "$BREW_PREFIX" ]]; then DEST="$BREW_PREFIX/bin/codex"; fi
+        prefix=$(brew --prefix 2>/dev/null || true)
+        if [[ -n "$prefix" ]]; then DEST="$prefix/bin/codex"; fi
       fi
-      # Fallbacks
       DEST=${DEST:-/opt/homebrew/bin/codex}
-      if [[ ! -d "/opt/homebrew/bin" ]]; then
-        DEST=${DEST:-/usr/local/bin/codex}
-      fi;;
-    Linux)
-      DEST="/usr/local/bin/codex";;
-    MINGW*|MSYS*|CYGWIN*)
-      DEST="$HOME/.local/bin/codex.exe";;
-    *) DEST="/usr/local/bin/codex";;
+      if [[ ! -d /opt/homebrew/bin ]]; then DEST=/usr/local/bin/codex; fi ;;
+    Linux) DEST=/usr/local/bin/codex ;;
+    MINGW*|MSYS*|CYGWIN*) DEST="$HOME/.local/bin/codex.exe" ;;
+    *) DEST=/usr/local/bin/codex ;;
   esac
 fi
 
@@ -98,61 +87,54 @@ tmpdir=$(mktemp -d 2>/dev/null || mktemp -d -t codex-install)
 cleanup() { rm -rf "$tmpdir"; }
 trap cleanup EXIT
 
-# Decide which release tag to use (prefer most recent release with our asset)
+# Choose a tag: newest release that has our asset
 if [[ -z "$TAG" ]]; then
-  log "querying latest release containing codex-$TARGET.tar.gz"
-  TAG=$(gh api -H 'Accept: application/vnd.github+json' \
-        "/repos/$REPO/releases?per_page=100" \
-        | jq -r --arg pat "codex-$TARGET.tar.gz" '
-            map(select(.draft==false))
-            | sort_by(.created_at) | reverse
-            | map(select(.assets | any(.name == $pat)))
-            | .[0].tag_name'
-       )
-  if [[ -z "$TAG" || "$TAG" == null ]]; then
-    # Fallback to .zst if .tar.gz not present
+  for ext in tar.gz zst; do
     TAG=$(gh api -H 'Accept: application/vnd.github+json' \
           "/repos/$REPO/releases?per_page=100" \
-          | jq -r --arg pat "codex-$TARGET.zst" '
+          | jq -r --arg pat "codex-$TARGET.${ext}" '
               map(select(.draft==false))
               | sort_by(.created_at) | reverse
               | map(select(.assets | any(.name == $pat)))
-              | .[0].tag_name'
-         )
-  fi
+              | .[0].tag_name')
+    [[ -n "$TAG" && "$TAG" != null ]] && break
+  done
   [[ -n "$TAG" && "$TAG" != null ]] || die "no suitable release found for $TARGET"
 fi
 
 log "selected tag: $TAG"
 
-# Decide asset name (handles macOS/Linux and Windows .exe variants)
+# Decide asset name (no regex quirks)
 rel_json=$(gh api -H 'Accept: application/vnd.github+json' "/repos/$REPO/releases/tags/$TAG")
-ASSET=$(echo "$rel_json" | jq -r --arg t "$TARGET" '
-  (.assets[]? | .name) // empty
-  | select(test("^codex-\Q"+$t+"\E(\\.exe)?\\.(tar\\.gz|zst)$"))
-  | .[0]?')
-if [[ -z "$ASSET" ]]; then
-  die "no suitable asset found for $TARGET in $TAG"
+if [[ "$TARGET" == *-pc-windows-msvc ]]; then
+  candidates=("codex-$TARGET.exe.tar.gz" "codex-$TARGET.exe.zst" "codex-$TARGET.exe.zip")
+else
+  candidates=("codex-$TARGET.tar.gz" "codex-$TARGET.zst")
 fi
+ASSET=""
+for cand in "${candidates[@]}"; do
+  present=$(echo "$rel_json" | jq -r --arg n "$cand" 'any(.assets[]?; .name==$n)')
+  if [[ "$present" == "true" ]]; then ASSET="$cand"; break; fi
+done
+[[ -n "$ASSET" ]] || die "no suitable asset found for $TARGET in $TAG"
 
 log "downloading $ASSET"
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "gh release download -R $REPO $TAG -p $ASSET -D $tmpdir"
   exit 0
 fi
-
 gh release download -R "$REPO" "$TAG" -p "$ASSET" -D "$tmpdir"
 
+# Unpack
 src_bin=""
 if [[ "$ASSET" == *.tar.gz ]]; then
   mkdir -p "$tmpdir/unpack"
   tar -C "$tmpdir/unpack" -xzf "$tmpdir/$ASSET"
-  # The tar contains a single file named like the asset
-  base=$(basename "$ASSET" .tar.gz)
+  base=${ASSET%.tar.gz}
   src_bin="$tmpdir/unpack/$base"
 elif [[ "$ASSET" == *.zst ]]; then
   command -v zstd >/dev/null || die "zstd is required to unpack .zst"
-  base=$(basename "$ASSET" .zst)
+  base=${ASSET%.zst}
   zstd -d -c "$tmpdir/$ASSET" > "$tmpdir/$base"
   src_bin="$tmpdir/$base"
 else
@@ -161,17 +143,14 @@ fi
 
 [[ -f "$src_bin" ]] || die "binary not found after unpack: $src_bin"
 
-# Decide whether sudo is needed (if not explicitly disabled)
+# Install (sudo only if needed)
 mkdir -p "$(dirname "$DEST")" 2>/dev/null || true
-if [[ $USE_SUDO -eq 1 ]]; then
-  if [[ -w "$(dirname "$DEST")" ]]; then
-    install -m 0755 "$src_bin" "$DEST"
-  else
-    sudo install -m 0755 "$src_bin" "$DEST"
-  fi
+if [[ $USE_SUDO -eq 1 && ! -w "$(dirname "$DEST")" ]]; then
+  sudo install -m 0755 "$src_bin" "$DEST"
 else
   install -m 0755 "$src_bin" "$DEST"
 fi
 
 log "installed to $DEST"
 "$DEST" --version || true
+
