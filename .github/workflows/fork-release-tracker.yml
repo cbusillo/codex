@@ -28,10 +28,25 @@ jobs:
           git config user.name  "codex-fork-bot"
           git config user.email "codex-fork-bot@users.noreply.github.com"
 
-      - name: Add upstream and fetch tags
+      - name: Add upstream and fetch tags (with retry)
+        shell: bash
         run: |
+          set -euo pipefail
           git remote add upstream https://github.com/openai/codex.git || git remote set-url upstream https://github.com/openai/codex.git
-          git fetch upstream --tags --prune
+          echo "Fetching upstream tags (up to 3 attempts)…"
+          for i in 1 2 3; do
+            if git fetch upstream --tags --prune; then
+              break
+            fi
+            echo "::warning::Fetch attempt $i failed; retrying in 5s…" >&2
+            sleep 5
+          done
+          git remote -v
+          # Verify we can list upstream rust-v tags (fail early with clear error)
+          if ! git ls-remote --tags upstream 'refs/tags/rust-v*' >/dev/null; then
+            echo "::error::Could not list upstream rust-v tags after retries" >&2
+            exit 1
+          fi
 
       - name: Determine latest upstream release tag (stable or prerelease)
         id: latest
