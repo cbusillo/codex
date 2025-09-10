@@ -19,7 +19,7 @@ set -euo pipefail
 REPO="cbusillo/codex"
 TAG=""
 TARGET=""
-DEST="/usr/local/bin/codex"
+DEST=""
 USE_SUDO=1
 DRY_RUN=0
 
@@ -44,7 +44,7 @@ done
 command -v gh >/dev/null || die "gh (GitHub CLI) is required"
 command -v jq >/dev/null || die "jq is required"
 
-# Auto-detect target triple if not supplied
+# Auto-detect target triple and default DEST if not supplied
 if [[ -z "$TARGET" ]]; then
   uname_s=$(uname -s)
   uname_m=$(uname -m)
@@ -68,6 +68,27 @@ if [[ -z "$TARGET" ]]; then
         *) die "unsupported Windows arch: $uname_m";;
       esac;;
     *) die "unsupported OS: $uname_s";;
+  esac
+fi
+
+# Default install destination by platform if not provided
+if [[ -z "${DEST}" ]]; then
+  case "$(uname -s)" in
+    Darwin)
+      if command -v brew >/dev/null 2>&1; then
+        BREW_PREFIX=$(brew --prefix 2>/dev/null || true)
+        if [[ -n "$BREW_PREFIX" ]]; then DEST="$BREW_PREFIX/bin/codex"; fi
+      fi
+      # Fallbacks
+      DEST=${DEST:-/opt/homebrew/bin/codex}
+      if [[ ! -d "/opt/homebrew/bin" ]]; then
+        DEST=${DEST:-/usr/local/bin/codex}
+      fi;;
+    Linux)
+      DEST="/usr/local/bin/codex";;
+    MINGW*|MSYS*|CYGWIN*)
+      DEST="$HOME/.local/bin/codex.exe";;
+    *) DEST="/usr/local/bin/codex";;
   esac
 fi
 
@@ -104,13 +125,14 @@ fi
 
 log "selected tag: $TAG"
 
-# Decide asset name
-ASSET="codex-$TARGET.tar.gz"
-HAS_TARGZ=$(gh api -H 'Accept: application/vnd.github+json' \
-             "/repos/$REPO/releases/tags/$TAG" | jq -r --arg n "$ASSET" \
-             'any(.assets[]?; .name==$n)')
-if [[ "$HAS_TARGZ" != "true" ]]; then
-  ASSET="codex-$TARGET.zst"
+# Decide asset name (handles macOS/Linux and Windows .exe variants)
+rel_json=$(gh api -H 'Accept: application/vnd.github+json' "/repos/$REPO/releases/tags/$TAG")
+ASSET=$(echo "$rel_json" | jq -r --arg t "$TARGET" '
+  (.assets[]? | .name) // empty
+  | select(test("^codex-\Q"+$t+"\E(\\.exe)?\\.(tar\\.gz|zst)$"))
+  | .[0]?')
+if [[ -z "$ASSET" ]]; then
+  die "no suitable asset found for $TARGET in $TAG"
 fi
 
 log "downloading $ASSET"
@@ -139,13 +161,17 @@ fi
 
 [[ -f "$src_bin" ]] || die "binary not found after unpack: $src_bin"
 
-mkdir -p "$(dirname "$DEST")"
+# Decide whether sudo is needed (if not explicitly disabled)
+mkdir -p "$(dirname "$DEST")" 2>/dev/null || true
 if [[ $USE_SUDO -eq 1 ]]; then
-  sudo install -m 0755 "$src_bin" "$DEST"
+  if [[ -w "$(dirname "$DEST")" ]]; then
+    install -m 0755 "$src_bin" "$DEST"
+  else
+    sudo install -m 0755 "$src_bin" "$DEST"
+  fi
 else
   install -m 0755 "$src_bin" "$DEST"
 fi
 
 log "installed to $DEST"
 "$DEST" --version || true
-
