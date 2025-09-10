@@ -88,17 +88,9 @@ jobs:
             git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
             git checkout -B "$BR" origin/main
           fi
-          VER="${{ steps.decide.outputs.fork_ver }}"
-          # Update [workspace.package] version line
-          python3 - << 'PY'
-import re, os
-p='codex-rs/Cargo.toml'
-s=open(p).read()
-ver=os.environ['VER']
-news=re.sub(r"(\[workspace\.package\][\s\S]*?\n)version = \"[^\"]+\"",
-            lambda m: m.group(1)+f'version = "{ver}"', s, count=1)
-open(p,'w').write(news)
-PY
+          export VER="${{ steps.decide.outputs.fork_ver }}"
+          # Update [workspace.package] version line (avoid YAML heredoc pitfalls)
+          python3 -c 'import re,sys; p="codex-rs/Cargo.toml"; ver=sys.argv[1]; s=open(p).read(); s=re.sub(r"(\\[workspace\\.package\\][\\s\\S]*?\\n)version = \"[^\"]+\"", "\\1version = \"%s\"" % ver, s, count=1); open(p,"w").write(s)' "$VER"
           git add codex-rs/Cargo.toml
           git commit -m "Release ${VER}" || echo "Nothing to commit"
 
