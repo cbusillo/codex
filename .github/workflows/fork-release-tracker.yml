@@ -104,8 +104,8 @@ jobs:
             git checkout -B "$BR" origin/main
           fi
           export VER="${{ steps.decide.outputs.fork_ver }}"
-          # Update [workspace.package] version line (avoid YAML heredoc pitfalls)
-          python3 -c 'import re,sys; p="codex-rs/Cargo.toml"; ver=sys.argv[1]; s=open(p).read(); s=re.sub(r"(\\[workspace\\.package\\][\\s\\S]*?\\n)version = \"[^\"]+\"", "\\1version = \"%s\"" % ver, s, count=1); open(p,"w").write(s)' "$VER"
+          # Update version line in codex-rs/Cargo.toml (first top-level version key)
+          python3 -c 'import re,sys; p="codex-rs/Cargo.toml"; ver=sys.argv[1]; s=open(p).read(); s=re.sub(r"(?m)^version = \"[^\"]+\"", "version = \""+ver+"\"", s, count=1); open(p,"w").write(s)' "$VER"
           git add codex-rs/Cargo.toml
           git commit -m "Release ${VER}" || echo "Nothing to commit"
 
