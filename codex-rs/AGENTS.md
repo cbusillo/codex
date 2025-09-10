@@ -29,6 +29,11 @@ Release From Our Fork
   3) Tag: `git tag -a rust-v<version> -m "Release <version>" && git push origin rust-v<version>`.
 - CI artifacts: the workflow validates the tag matches `Cargo.toml`, cross‑builds for Linux/macOS/Windows (x86_64 + arm64), produces `.zst` and `.tar.gz` (and `.zip` on Windows), and attaches them to the GitHub Release.
 
+Local Release Build (script)
+- Build the latest (or a specific) fork tag locally with a lean test pass:
+  - From repo root: `scripts/local-release-build.sh [--tag rust-vX.Y.Z[-alpha.YYYYMMDD]] [--skip-tests] [--no-clean]`
+- This helper is fork-only and lives on `fix-mcp-session-id-response`. Do not add it to `pr/compat-mode`.
+
 What’s Special In This Fork (MCP compatibility)
 - Immediate ack for MCP tools: `codex` tool can return an immediate response with a session ID when `mcp.compatibility_mode = true`.
 - Continue a session: `codex-reply` tool sends further prompts for the same session.

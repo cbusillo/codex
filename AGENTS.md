@@ -110,3 +110,17 @@ From `fix-mcp-session-id-response`:
 - If upstream moved: automation will sync nightly; if an issue about rebase conflicts appears, follow the commands and push with `--force-with-lease`.
 - Fork development: work on `fix-mcp-session-id-response`. Build with `cargo build --workspace --release`. For compat testing: `cargo run -p codex-mcp-server -- --compatibility-mode`.
 - Upstream PRs: base from `pr/compat-mode`, keep changes default‑off and capability‑gated, tests green, and no fork‑only files.
+
+## Local Release Builds (fork)
+
+For reproducible local builds of the latest fork tag, use the helper script:
+
+- `scripts/local-release-build.sh` (lives on `fix-mcp-session-id-response`; do not add to PR branches)
+- Usage examples:
+  - Latest tag: `scripts/local-release-build.sh`
+  - Specific tag: `scripts/local-release-build.sh --tag rust-v0.32.0-alpha.20250910`
+  - Skip tests: `scripts/local-release-build.sh --skip-tests`
+  - Keep artifacts: `scripts/local-release-build.sh --no-clean`
+
+What it does:
+- Fetches tags, checks out the tag on a temp branch, runs lean tests (core/common/protocol), builds `--release`, prints `codex --version` and a help snippet, and cleans + deletes the temp branch unless `--no-clean`.
