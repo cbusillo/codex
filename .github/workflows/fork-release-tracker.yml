@@ -80,8 +80,14 @@ jobs:
         run: |
           set -euo pipefail
           BR="fix-mcp-session-id-response"
-          git fetch origin "$BR"
-          git checkout -B "$BR" "origin/$BR"
+          if git ls-remote --exit-code --heads origin "$BR" >/dev/null 2>&1; then
+            git fetch --no-tags origin +"refs/heads/$BR":"refs/remotes/origin/$BR"
+            git checkout -B "$BR" "origin/$BR"
+          else
+            echo "::notice::Branch $BR not found on origin; creating from origin/main"
+            git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+            git checkout -B "$BR" origin/main
+          fi
           VER="${{ steps.decide.outputs.fork_ver }}"
           # Update [workspace.package] version line
           python3 - << 'PY'
