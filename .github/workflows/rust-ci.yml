@@ -5,6 +5,9 @@ on:
     branches:
       - main
   workflow_dispatch:
+  # Enable organization/repo rulesets that enforce Required Workflows to
+  # call this CI from the default branch.
+  workflow_call:
 
 # CI builds in debug (dev) for faster signal.
 
