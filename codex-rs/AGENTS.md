@@ -29,10 +29,11 @@ Release From Our Fork
   3) Tag: `git tag -a rust-v<version> -m "Release <version>" && git push origin rust-v<version>`.
 - CI artifacts: the workflow validates the tag matches `Cargo.toml`, cross‑builds for Linux/macOS/Windows (x86_64 + arm64), produces `.zst` and `.tar.gz` (and `.zip` on Windows), and attaches them to the GitHub Release.
 
-Local Release Build (script)
-- Build the latest (or a specific) fork tag locally with a lean test pass:
-  - From repo root: `scripts/local-release-build.sh [--tag rust-vX.Y.Z[-alpha.YYYYMMDD]] [--skip-tests] [--no-clean]`
-- This helper is fork-only and lives on `fix-mcp-session-id-response`. Do not add it to `pr/compat-mode`.
+Local Release Build
+- Build a specific release tag locally (there is no helper script in this repo):
+  - `git fetch --tags && git switch --detach rust-vX.Y.Z`
+  - `cargo build --workspace --release` (from `codex-rs`)
+  - Verify: run the built `codex --version`.
 
 What’s Special In This Fork (MCP compatibility)
 - Immediate ack for MCP tools: `codex` tool can return an immediate response with a session ID when `mcp.compatibility_mode = true`.
@@ -57,7 +58,7 @@ Sandbox Notes
 
 Daily Update Flow
 - Sync mirror: `git checkout main && git fetch upstream && git merge --ff-only upstream/main && git push origin main`.
-- Refresh custom: `git checkout custom && git rebase main` (enable `git config rerere.enabled true`).
+- Refresh fork work: `git checkout fix-mcp-session-id-response && git rebase main` (enable `git config rerere.enabled true`).
 
 Contact / Context
 - This branch incorporates: MCP compatibility mode, `codex-get-response`, increased default get‑response timeout (600s), and session history handling.

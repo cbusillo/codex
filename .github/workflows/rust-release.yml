@@ -49,6 +49,13 @@ jobs:
     needs: tag-check
     name: ${{ matrix.runner }} - ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
+    # Gate matrix: run full set on upstream; on forks, keep macOS arm + Linux x86_64 only
+    if: ${{
+      github.repository == 'openai/codex'
+      || matrix.target == 'aarch64-apple-darwin'
+      || matrix.target == 'x86_64-unknown-linux-gnu'
+      || matrix.target == 'x86_64-unknown-linux-musl'
+    }}
     timeout-minutes: 30
     defaults:
       run:
@@ -123,35 +130,16 @@ jobs:
           # ${{ matrix.target }}
           dest="dist/${{ matrix.target }}"
 
-          # For compatibility with environments that lack the `zstd` tool we
-          # additionally create a `.tar.gz` for all platforms and `.zip` for
-          # Windows alongside every single binary that we publish. The end result is:
-          #   codex-<target>.zst          (existing)
-          #   codex-<target>.tar.gz       (new)
-          #   codex-<target>.zip          (only for Windows)
-
-          # 1. Produce a .tar.gz for every file in the directory *before* we
-          #    run `zstd --rm`, because that flag deletes the original files.
+          # Create .tar.gz for all platforms and .zip for Windows. Also keep .zst to match upstream.
           for f in "$dest"/*; do
             base="$(basename "$f")"
-            # Skip files that are already archives (shouldn't happen, but be
-            # safe).
             if [[ "$base" == *.tar.gz || "$base" == *.zip ]]; then
               continue
             fi
-
-            # Create per-binary tar.gz
             tar -C "$dest" -czf "$dest/${base}.tar.gz" "$base"
-
-            # Create zip archive for Windows binaries
-            # Must run from inside the dest dir so 7z won't
-            # embed the directory path inside the zip.
             if [[ "${{ matrix.runner }}" == windows* ]]; then
               (cd "$dest" && 7z a "${base}.zip" "$base")
             fi
-
-            # Also create .zst (existing behaviour) *and* remove the original
-            # uncompressed binary to keep the directory small.
             zstd -T0 -19 --rm "$dest/$base"
           done
 

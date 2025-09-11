@@ -88,7 +88,15 @@ jobs:
     timeout-minutes: 30
     needs: changed
     # Keep job-level if to avoid spinning up runners when not needed
-    if: ${{ needs.changed.outputs.codex == 'true' || needs.changed.outputs.workflows == 'true' || github.event_name == 'push' }}
+    if: ${{
+      (needs.changed.outputs.codex == 'true' || needs.changed.outputs.workflows == 'true' || github.event_name == 'push')
+      && (
+        github.repository == 'openai/codex'
+        || matrix.target == 'aarch64-apple-darwin'
+        || matrix.target == 'x86_64-unknown-linux-gnu'
+        || matrix.target == 'x86_64-unknown-linux-musl'
+      )
+    }}
     defaults:
       run:
         working-directory: codex-rs
@@ -122,10 +130,7 @@ jobs:
             target: aarch64-pc-windows-msvc
             profile: dev
 
-          # Also run representative release builds on Mac and Linux because
-          # there could be release-only build errors we want to catch.
-          # Hopefully this also pre-populates the build cache to speed up
-          # releases.
+          # Representative release builds
           - runner: macos-14
             target: aarch64-apple-darwin
             profile: release
@@ -156,7 +161,7 @@ jobs:
             ${{ github.workspace }}/codex-rs/target/
           key: cargo-${{ matrix.runner }}-${{ matrix.target }}-${{ matrix.profile }}-${{ hashFiles('**/Cargo.lock') }}
 
-      - if: ${{ matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl'}}
+      - if: ${{ matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl' }}
         name: Install musl build tools
         run: |
           sudo apt install -y musl-tools pkg-config && sudo rm -rf /var/lib/apt/lists/*

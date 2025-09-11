@@ -2,7 +2,7 @@
 
 In the codex-rs folder where the rust code lives:
 
-- Crate names are prefixed with `codex-`. For example, the `core` folder's crate is named `codex-core`
+- Most crate names are prefixed with `codex-`. For example, the `core` folder's crate is named `codex-core`. A known exception is `mcp-types` which intentionally has no `codex-` prefix.
 - When using format! and you can inline variables into {}, always do that.
 - Never add or modify any code related to `CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR` or `CODEX_SANDBOX_ENV_VAR`.
   - You operate in a sandbox where `CODEX_SANDBOX_NETWORK_DISABLED=1` will be set whenever you use the `shell` tool. Any existing code that uses `CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR` was authored with this fact in mind. It is often used to early exit out of tests that the author knew you would not be able to run given your sandbox limitations.
@@ -75,11 +75,14 @@ If you don’t have the tool:
 
 ## Automation & Releases (fork)
 
-- Nightly workflows (UTC):
+- Scheduled workflows run from the default branch; ours is `main`.
+- Release workflow: `.github/workflows/rust-release.yml` triggers on tags matching `rust-vX.Y.Z` (including prereleases like `-alpha.N` or `-beta.N`).
+- Nightly workflows (defined on `main`, UTC):
   - `fork-sync` (03:17): fast‑forwards (or rebases when needed) `main` from `upstream/main`, then pushes to our fork. Preserves `.github/workflows`.
   - `rebase-branches` (03:29): rebases `fix-mcp-session-id-response` and `pr/compat-mode` onto `main`. On conflicts, an issue is opened with exact commands to resolve.
-  - `fork-release-tracker` (03:41): polls upstream tags (stable + prerelease). For each new base `X.Y.Z`, if no fork tag exists, bumps `codex-rs/Cargo.toml` on `fix-mcp-session-id-response` to `X.Y.Z-alpha.YYYYMMDD`, tags `rust-vX.Y.Z-alpha.YYYYMMDD`, and pushes to trigger our `rust-release` workflow.
+  - `fork-release-tracker` (03:41): polls upstream tags (stable + prerelease). For each new base `X.Y.Z`, if no fork tag exists, bumps `codex-rs/Cargo.toml` on `fix-mcp-session-id-response` to `X.Y.Z-alpha.YYYYMMDD`, tags `rust-vX.Y.Z-alpha.YYYYMMDD`, and pushes to trigger `rust-release`.
 - Required secret: `SYNC_TOKEN` (PAT with `contents:write`, `pull_requests:write`). Actions → General → Workflow permissions must be “Read and write.”
+
 - Manual triggers (either UI or CLI):
   - `gh workflow run fork-sync`
   - `gh workflow run rebase-branches`
@@ -113,14 +116,9 @@ From `fix-mcp-session-id-response`:
 
 ## Local Release Builds (fork)
 
-For reproducible local builds of the latest fork tag, use the helper script:
+Reproducible local build of a release tag (no helper script in repo):
 
-- `scripts/local-release-build.sh` (lives on `fix-mcp-session-id-response`; do not add to PR branches)
-- Usage examples:
-  - Latest tag: `scripts/local-release-build.sh`
-  - Specific tag: `scripts/local-release-build.sh --tag rust-v0.32.0-alpha.20250910`
-  - Skip tests: `scripts/local-release-build.sh --skip-tests`
-  - Keep artifacts: `scripts/local-release-build.sh --no-clean`
-
-What it does:
-- Fetches tags, checks out the tag on a temp branch, runs lean tests (core/common/protocol), builds `--release`, prints `codex --version` and a help snippet, and cleans + deletes the temp branch unless `--no-clean`.
+- Fetch and check out a tag: `git fetch --tags && git switch --detach rust-vX.Y.Z`
+- Build: `cargo build --workspace --release` (from `codex-rs`)
+- Quick verification: run `target/<triple>/release/codex --version` and spot-check `codex --help`.
+- Optional lean tests: run per-crate tests (e.g., `cargo test -p codex-core`) and, if you changed common/core/protocol locally, consider `cargo test --all-features`.
