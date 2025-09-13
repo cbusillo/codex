@@ -64,3 +64,73 @@ If you don’t have the tool:
 ### Test assertions
 
 - Tests should use pretty_assertions::assert_eq for clearer diffs. Import this at the top of the test module if it isn't already.
+ 
+
+---
+
+## Fork Branches (local repo)
+
+- `main`: fast‑forward mirror of `openai/codex:main`. No direct commits.
+- `fix-mcp-session-id-response`: long‑lived fork branch for our minimal changes and releases.
+- `pr/compat-mode`: PR staging branch; default‑off compatibility mode for clients that do not consume async notifications. Do not include fork‑only files here.
+
+## Automation & Releases (fork)
+
+- Scope: These workflows exist only on the fork (`cbusillo/codex`) on branch `main`. They are not present upstream (`openai/codex`). When using `gh`, ensure you target the fork: set `GH_REPO=cbusillo/codex` or pass `-R cbusillo/codex`.
+- Release workflow: `.github/workflows/rust-release.yml` triggers on tags matching `rust-vX.Y.Z` (including `-alpha.*`/`-beta.*`). Matrix builds publish whatever succeeds; failing platforms are skipped.
+- Nightly workflows (UTC, on fork `main`):
+  - `fork-sync` (03:17): fast‑forwards (or rebases) `main` from `upstream/main`; preserves `.github/workflows`.
+  - `rebase-branches` (03:29): rebases `fix-mcp-session-id-response` and `pr/compat-mode` onto `main`; opens an issue on conflicts with exact commands.
+  - `fork-release-tracker` (03:41): polls upstream tags. For each new base `X.Y.Z`, if no fork tag exists, it updates `codex-rs/Cargo.toml` to `X.Y.Z-alpha.YYYYMMDD`, creates tag `rust-vX.Y.Z-alpha.YYYYMMDD`, and pushes to kick off `rust-release`. No manual bump needed for these nightly prereleases.
+- Required secret: `SYNC_TOKEN` (PAT with `contents:write`, `pull_requests:write`). Actions → General → Workflow permissions must be “Read and write.” Configure these on the fork, not upstream.
+
+- Manual triggers (either UI or CLI):
+  - `gh workflow run fork-sync -R cbusillo/codex`
+  - `gh workflow run rebase-branches -R cbusillo/codex`
+  - `gh workflow run fork-release-tracker -R cbusillo/codex`
+
+## PR Guidance (upstream)
+
+- Scope: default‑off “compatibility mode.” When enabled:
+  - `codex` returns an immediate response with a sessionId.
+  - `codex-reply` returns immediately; background processing continues.
+  - `codex-get-response` is advertised and can fetch the final/failed content. It is only listed when compatibility mode is on.
+- Normal mode remains unchanged. Tests must cover compat‑on and compat‑off.
+- Capabilities: only advertise the extra tool when the flag is on.
+- Avoid naming specific third‑party products in PR text.
+- Exclude fork‑only files (e.g., this AGENTS.md) from PR branches.
+
+## Manual Release (when needed)
+
+From `fix-mcp-session-id-response`:
+
+1) Set `[workspace.package].version` in `codex-rs/Cargo.toml` to the exact tag you plan to publish (e.g., `X.Y.Z` or `X.Y.Z-alpha.YYYYMMDD`). The `rust-release.yml` workflow validates tag == Cargo.toml.
+2) `git commit -m "Release X.Y.Z[-alpha.YYYYMMDD]"`
+3) `git tag -a rust-vX.Y.Z[-alpha.YYYYMMDD] -m "Release X.Y.Z[-alpha.YYYYMMDD]" && git push origin refs/tags/rust-vX.Y.Z[-alpha.YYYYMMDD]`
+4) Watch Actions → `rust-release`; verify which artifacts published. Partial publish is expected if some matrix targets fail.
+
+Note: Nightly prereleases on the fork do not require a manual bump — the tracker updates `Cargo.toml` before tagging so validation passes.
+
+## CI vs Release
+
+- `rust-ci` is strict: any failing matrix job makes CI red; keep this for signal.
+- `rust-release` is tolerant at build time: matrix jobs use `continue-on-error`, so successful targets still publish. Tag format and tag == Cargo.toml are still enforced.
+
+## gh Context Tip
+
+If CLI results look inconsistent (e.g., you see upstream runs while inspecting fork history), set the context explicitly: `export GH_REPO=cbusillo/codex` or pass `-R cbusillo/codex` to `gh` commands.
+
+## Next Session Checklist
+
+- If upstream moved: automation will sync nightly; if an issue about rebase conflicts appears, follow the commands and push with `--force-with-lease`.
+- Fork development: work on `fix-mcp-session-id-response`. Build with `cargo build --workspace --release`. For compat testing: `cargo run -p codex-mcp-server -- --compatibility-mode`.
+- Upstream PRs: base from `pr/compat-mode`, keep changes default‑off and capability‑gated, tests green, and no fork‑only files.
+
+## Local Release Builds (fork)
+
+Reproducible local build of a release tag (no helper script in repo):
+
+- Fetch and check out a tag: `git fetch --tags && git switch --detach rust-vX.Y.Z`
+- Build: `cargo build --workspace --release` (from `codex-rs`)
+- Quick verification: run `target/<triple>/release/codex --version` and spot-check `codex --help`.
+- Optional lean tests: run per-crate tests (e.g., `cargo test -p codex-core`) and, if you changed common/core/protocol locally, consider `cargo test --all-features`.

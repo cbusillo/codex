@@ -58,6 +58,8 @@ jobs:
     needs: tag-check
     name: ${{ matrix.runner }} - ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
+    # Allow partial publishes: successful targets upload artifacts even if some fail.
+    continue-on-error: true
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-v') }}
     timeout-minutes: 30
     defaults:
@@ -173,6 +175,94 @@ jobs:
           path: |
             codex-rs/dist/${{ matrix.target }}/*
 
+<<<<<<< HEAD
+=======
+  build_reduced:
+    needs: tag-check
+    name: ${{ matrix.runner }} - ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: true
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-v') && github.repository != 'openai/codex' }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: codex-rs
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.89
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ${{ github.workspace }}/codex-rs/target/
+          key: cargo-${{ matrix.runner }}-${{ matrix.target }}-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - if: ${{ matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl'}}
+        name: Install musl build tools
+        run: |
+          sudo apt install -y musl-tools pkg-config
+
+      - name: Cargo build
+        run: cargo build --target ${{ matrix.target }} --release --bin codex
+
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          dest="dist/${{ matrix.target }}"
+          mkdir -p "$dest"
+
+          if [[ "${{ matrix.runner }}" == windows* ]]; then
+            cp target/${{ matrix.target }}/release/codex.exe "$dest/codex-${{ matrix.target }}.exe"
+          else
+            cp target/${{ matrix.target }}/release/codex "$dest/codex-${{ matrix.target }}"
+          fi
+
+      - if: ${{ matrix.runner == 'windows-11-arm' }}
+        name: Install zstd
+        shell: powershell
+        run: choco install -y zstandard
+
+      - name: Compress artifacts
+        shell: bash
+        run: |
+          dest="dist/${{ matrix.target }}"
+          for f in "$dest"/*; do
+            base="$(basename "$f")"
+            if [[ "$base" == *.tar.gz || "$base" == *.zip ]]; then
+              continue
+            fi
+            tar -C "$dest" -czf "$dest/${base}.tar.gz" "$base"
+            if [[ "${{ matrix.runner }}" == windows* ]]; then
+              (cd "$dest" && 7z a "${base}.zip" "$base")
+            fi
+            zstd -T0 -19 --rm "$dest/$base"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            codex-rs/dist/${{ matrix.target }}/*
+
+>>>>>>> b1354b1e (docs/ci: clarify fork automations; guard AGENTS.md on upstream PRs; release: allow partial publish (matrix continue-on-error))
   release:
     needs: build
     name: release

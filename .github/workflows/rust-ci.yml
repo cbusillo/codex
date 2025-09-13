@@ -66,6 +66,23 @@ jobs:
       - name: Verify codegen for mcp-types
         run: ./mcp-types/check_lib_rs.py
 
+      - name: Ensure fork-only AGENTS.md not present in upstream PRs
+        if: ${{ github.repository == 'openai/codex' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden=("AGENTS.md" "codex-rs/AGENTS.md")
+          found=()
+          for f in "${forbidden[@]}"; do
+            if [[ -f "$f" ]]; then
+              found+=("$f")
+            fi
+          done
+          if [[ ${#found[@]} -gt 0 ]]; then
+            echo "Fork-only files present in upstream context: ${found[*]}" >&2
+            exit 1
+          fi
+
   cargo_shear:
     name: cargo shear
     runs-on: ubuntu-24.04
