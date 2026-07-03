@@ -1951,12 +1951,23 @@
       "type": "object"
     },
     "PluginListMarketplaceKind": {
-      "enum": [
-        "local",
-        "workspace-directory",
-        "shared-with-me"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "local",
+            "workspace-directory",
+            "shared-with-me"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Legacy Desktop catalog filter accepted for startup compatibility.",
+          "enum": [
+            "vertical"
+          ],
+          "type": "string"
+        }
+      ]
     },
     "PluginListParams": {
       "properties": {
@@ -2320,6 +2331,12 @@
           "type": "string"
         }
       ]
+    },
+    "RemoteControlEnableParams": {
+      "type": "object"
+    },
+    "RemoteControlStatusReadParams": {
+      "type": "object"
     },
     "RequestId": {
       "anyOf": [
@@ -5585,6 +5602,54 @@
         "params"
       ],
       "title": "ExperimentalFeature/enablement/setRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "remoteControl/status/read"
+          ],
+          "title": "RemoteControl/status/readRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/RemoteControlStatusReadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "RemoteControl/status/readRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "remoteControl/enable"
+          ],
+          "title": "RemoteControl/enableRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/RemoteControlEnableParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "RemoteControl/enableRequest",
       "type": "object"
     },
     {

@@ -1,0 +1,112 @@
+{
+    "name": "exec-readonly-write-denied",
+    "model": "gpt-5.1-codex",
+    "sandbox": "read-only",
+    "files": {
+        "README.md": "# Read-only write denial fixture\n"
+    },
+    "prompt": "Try to create blocked.txt in the workspace, then reply with exactly: write denied",
+    "responses_api": {
+        "responses": [
+            {
+                "response_id": "resp-write-call",
+                "events": [
+                    {
+                        "type": "response.created",
+                        "payload": {
+                            "type": "response.created",
+                            "response": {
+                                "id": "resp-write-call"
+                            }
+                        }
+                    },
+                    {
+                        "item": {
+                            "type": "function_call",
+                            "call_id": "call-write-denied",
+                            "name": "shell_command",
+                            "arguments": "{\"command\":\"printf denied > blocked.txt\",\"login\":false,\"timeout_ms\":1000}"
+                        }
+                    }
+                ]
+            },
+            {
+                "response_id": "resp-write-final",
+                "events": [
+                    {
+                        "item": {
+                            "type": "message",
+                            "role": "assistant",
+                            "id": "msg-write-final",
+                            "content": [
+                                {
+                                    "type": "output_text",
+                                    "text": "write denied"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "expect": {
+        "returncode": 0,
+        "assistant_contains": [
+            "write denied"
+        ],
+        "responses_request_count": 2,
+        "workspace_files": [
+            {
+                "path": "blocked.txt",
+                "exists": false
+            }
+        ],
+        "event_count_any": [
+            {
+                "msg.exec_command_begin": 1,
+                "msg.exec_command_output_delta": 1,
+                "msg.agent_message": 1,
+                "msg.task_lifecycle": 2
+            },
+            {
+                "item.command_execution": 2,
+                "item.agent_message": 1,
+                "turn.completed": 1
+            }
+        ],
+        "command_events": [
+            {
+                "command_contains": "blocked.txt",
+                "status_any": [
+                    "started",
+                    "failed"
+                ]
+            },
+            {
+                "status_any": [
+                    "output",
+                    "failed"
+                ],
+                "output_contains": [
+                    "operation not permitted"
+                ]
+            }
+        ],
+        "function_call_outputs": [
+            {
+                "request": 1,
+                "call_id": "call-write-denied",
+                "contains_all": [
+                    "operation not permitted"
+                ],
+                "contains_any": [
+                    "\"exit_code\":1",
+                    "Exit code: 1"
+                ]
+            }
+        ]
+    },
+    "max_seconds": 30,
+    "timeout_seconds": 90
+}

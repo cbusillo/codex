@@ -1,0 +1,106 @@
+{
+    "name": "exec-workspace-write-edit",
+    "model": "gpt-5.1-codex",
+    "sandbox": "workspace-write",
+    "files": {
+        "README.md": "# Workspace write fixture\n"
+    },
+    "prompt": "Create edited.txt containing harness-edit-ok, then reply with exactly: edit done",
+    "responses_api": {
+        "responses": [
+            {
+                "response_id": "resp-edit-call",
+                "events": [
+                    {
+                        "type": "response.created",
+                        "payload": {
+                            "type": "response.created",
+                            "response": {
+                                "id": "resp-edit-call"
+                            }
+                        }
+                    },
+                    {
+                        "item": {
+                            "type": "function_call",
+                            "call_id": "call-edit-file",
+                            "name": "shell_command",
+                            "arguments": "{\"command\":\"printf 'harness-edit-ok\\n' > edited.txt\",\"login\":false,\"timeout_ms\":1000}"
+                        }
+                    }
+                ]
+            },
+            {
+                "response_id": "resp-edit-final",
+                "events": [
+                    {
+                        "item": {
+                            "type": "message",
+                            "role": "assistant",
+                            "id": "msg-edit-final",
+                            "content": [
+                                {
+                                    "type": "output_text",
+                                    "text": "edit done"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "expect": {
+        "returncode": 0,
+        "assistant_contains": [
+            "edit done"
+        ],
+        "responses_request_count": 2,
+        "workspace_files": [
+            {
+                "path": "edited.txt",
+                "exists": true,
+                "equals": "harness-edit-ok\n"
+            }
+        ],
+        "workspace_git_status": [
+            {
+                "equals": "?? edited.txt\n"
+            }
+        ],
+        "event_count_any": [
+            {
+                "msg.exec_command_begin": 1,
+                "msg.exec_command_output_delta": 1,
+                "msg.agent_message": 1,
+                "msg.task_lifecycle": 2
+            },
+            {
+                "item.command_execution": 2,
+                "item.agent_message": 1,
+                "turn.completed": 1
+            }
+        ],
+        "command_events": [
+            {
+                "command_contains": "edited.txt",
+                "status_any": [
+                    "started",
+                    "completed"
+                ]
+            }
+        ],
+        "function_call_outputs": [
+            {
+                "request": 1,
+                "call_id": "call-edit-file",
+                "contains_any": [
+                    "\"exit_code\":0",
+                    "Exit code: 0"
+                ]
+            }
+        ]
+    },
+    "max_seconds": 30,
+    "timeout_seconds": 90
+}

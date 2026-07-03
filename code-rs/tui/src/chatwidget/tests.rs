@@ -51,6 +51,8 @@ pub(super) use codex_app_server_protocol::CommandExecutionSource as AppServerCom
 pub(super) use codex_app_server_protocol::CommandExecutionStatus as AppServerCommandExecutionStatus;
 pub(super) use codex_app_server_protocol::ConfigWarningNotification;
 pub(super) use codex_app_server_protocol::CreditsSnapshot;
+pub(super) use codex_app_server_protocol::DynamicToolCallOutputContentItem as AppServerDynamicToolCallOutputContentItem;
+pub(super) use codex_app_server_protocol::DynamicToolCallStatus as AppServerDynamicToolCallStatus;
 pub(super) use codex_app_server_protocol::ErrorNotification;
 pub(super) use codex_app_server_protocol::ExecPolicyAmendment;
 pub(super) use codex_app_server_protocol::FileUpdateChange;

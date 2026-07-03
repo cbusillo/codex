@@ -27,6 +27,7 @@ use codex_protocol::protocol::AgentStatus as CoreAgentStatus;
 use codex_protocol::protocol::AskForApproval as CoreAskForApproval;
 use codex_protocol::protocol::GranularApprovalConfig as CoreGranularApprovalConfig;
 use codex_protocol::protocol::NetworkAccess as CoreNetworkAccess;
+use codex_protocol::protocol::TokenUsage as CoreTokenUsage;
 use codex_protocol::request_permissions::RequestPermissionProfile as CoreRequestPermissionProfile;
 use codex_protocol::user_input::UserInput as CoreUserInput;
 use codex_utils_absolute_path::AbsolutePathBuf;
@@ -77,6 +78,34 @@ fn approvals_reviewer_serializes_auto_review_and_accepts_legacy_guardian_subagen
         };
         assert_eq!(expected, reviewer);
     }
+}
+
+#[test]
+fn token_usage_breakdown_carries_cached_input_telemetry_presence() {
+    let usage = CoreTokenUsage {
+        input_tokens: 10,
+        cached_input_tokens: 0,
+        cached_input_tokens_reported: Some(true),
+        output_tokens: 4,
+        reasoning_output_tokens: 0,
+        total_tokens: 14,
+    };
+
+    let breakdown = TokenUsageBreakdown::from(usage);
+
+    assert_eq!(breakdown.cached_input_tokens, 0);
+    assert_eq!(breakdown.cached_input_tokens_reported, Some(true));
+    assert_eq!(
+        serde_json::to_value(&breakdown).expect("serialize token breakdown"),
+        json!({
+            "totalTokens": 14,
+            "inputTokens": 10,
+            "cachedInputTokens": 0,
+            "cachedInputTokensReported": true,
+            "outputTokens": 4,
+            "reasoningOutputTokens": 0,
+        })
+    );
 }
 
 #[test]

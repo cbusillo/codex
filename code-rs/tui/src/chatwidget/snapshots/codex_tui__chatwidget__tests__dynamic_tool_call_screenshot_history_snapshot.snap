@@ -1,0 +1,8 @@
+---
+source: tui/src/chatwidget/tests.rs
+expression: combined
+---
+• Called code_bridge({"action":"screenshot"})
+  └ {"ok": true, "message": "screenshot captured", "screenshot": {"mime":
+        "image/png", "data_len": 12345}}
+    <image content>

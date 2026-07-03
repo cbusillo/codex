@@ -1,0 +1,50 @@
+{
+    "name": "exec-basic-smoke",
+    "model": "gpt-5.1-codex",
+    "files": {
+        "README.md": "# Exec basic smoke fixture\n"
+    },
+    "prompt": "Reply with exactly: harness-ok",
+    "responses_api": {
+        "responses": [
+            {
+                "response_id": "resp-exec-basic-smoke",
+                "events": [
+                    {
+                        "item": {
+                            "type": "message",
+                            "role": "assistant",
+                            "id": "msg-exec-basic-smoke",
+                            "content": [
+                                {
+                                    "type": "output_text",
+                                    "text": "harness-ok"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "expect": {
+        "returncode": 0,
+        "assistant_contains": [
+            "harness-ok"
+        ],
+        "responses_request_count": 1,
+        "event_count": {
+            "item.agent_message": 1,
+            "turn.completed": 1
+        },
+        "responses": [
+            {
+                "request": 0,
+                "scope": "input",
+                "contains": "Reply with exactly: harness-ok"
+            }
+        ]
+    },
+    "max_seconds": 30,
+    "timeout_seconds": 90
+}

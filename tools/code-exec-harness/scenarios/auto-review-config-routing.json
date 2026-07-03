@@ -1,0 +1,61 @@
+{
+    "name": "auto-review-config-routing",
+    "model": "chat-model-fixture",
+    "prompt": "Run an auto-review routing fixture. Do not call tools. Reply exactly: auto review routed",
+    "files": {
+        "README.md": "# Auto Review routing fixture\n"
+    },
+    "config_toml": "approval_policy = \"on-request\"\napprovals_reviewer = \"auto_review\"\n",
+    "responses_api": {
+        "responses": [
+            {
+                "response_id": "resp-auto-review-routing",
+                "events": [
+                    {
+                        "item": {
+                            "type": "message",
+                            "role": "assistant",
+                            "id": "msg-auto-review-routing",
+                            "content": [
+                                {
+                                    "type": "output_text",
+                                    "text": "auto review routed"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "expect": {
+        "returncode": 0,
+        "assistant_contains": [
+            "auto review routed"
+        ],
+        "responses_request_count": 1,
+        "event_count": {
+            "thread.started": 1,
+            "item.completed": 1,
+            "turn.completed": 1
+        },
+        "events": [
+            {
+                "type": "thread.started",
+                "approvals_reviewer": "guardian_subagent"
+            }
+        ],
+        "responses": [
+            {
+                "request": 0,
+                "scope": "body",
+                "contains_all": [
+                    "chat-model-fixture",
+                    "Run an auto-review routing fixture."
+                ]
+            }
+        ]
+    },
+    "max_seconds": 30,
+    "timeout_seconds": 90
+}

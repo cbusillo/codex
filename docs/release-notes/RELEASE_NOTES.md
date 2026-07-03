@@ -5,8 +5,7 @@ This release reduces prompt-cache churn so repeated Every Code turns are less li
 ### Changes
 
 - Stable prompt content now stays ahead of volatile context such as CTX_UI timelines, environment snapshots, and Auto Review ledger details, helping providers reuse cached input across turns.
-- The TUI footer now shows prompt-cache hit rate when the provider reports cached input token telemetry, including a token-weighted rolling average for recent turns.
-- App-server protocol schemas now expose whether cached input token telemetry was reported, so missing cache data is not confused with a real 0% cache hit.
+- `/status` and the configurable TUI footer status line now show prompt-cache hit rate when cached input tokens are non-zero.
 
 ### Install
 

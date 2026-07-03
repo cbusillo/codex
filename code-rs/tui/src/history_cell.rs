@@ -47,6 +47,8 @@ use crate::wrapping::adaptive_wrap_line;
 use crate::wrapping::adaptive_wrap_lines;
 use base64::Engine;
 use codex_app_server_protocol::AskForApproval;
+use codex_app_server_protocol::DynamicToolCallOutputContentItem;
+use codex_app_server_protocol::DynamicToolCallStatus;
 use codex_app_server_protocol::McpAuthStatus;
 use codex_app_server_protocol::McpServerStatus;
 use codex_app_server_protocol::McpServerStatusDetail;
@@ -2003,6 +2005,158 @@ pub(crate) fn new_active_mcp_tool_call(
     McpToolCallCell::new(call_id, invocation, animations_enabled)
 }
 
+#[derive(Debug)]
+pub(crate) struct DynamicToolCallCell {
+    namespace: Option<String>,
+    tool: String,
+    arguments: serde_json::Value,
+    status: DynamicToolCallStatus,
+    content_items: Vec<DynamicToolCallOutputContentItem>,
+    success: Option<bool>,
+}
+
+impl DynamicToolCallCell {
+    fn completed(&self) -> bool {
+        matches!(
+            self.status,
+            DynamicToolCallStatus::Completed | DynamicToolCallStatus::Failed
+        )
+    }
+
+    fn invocation_line(&self) -> Line<'static> {
+        let args_str = serde_json::to_string(&self.arguments)
+            .unwrap_or_else(|_| self.arguments.to_string());
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        if let Some(namespace) = &self.namespace {
+            spans.push(namespace.clone().cyan());
+            spans.push(".".into());
+        }
+        spans.extend([
+            self.tool.clone().cyan(),
+            "(".into(),
+            args_str.dim(),
+            ")".into(),
+        ]);
+        spans.into()
+    }
+
+    fn rendered_content_lines(&self, width: usize) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+        for item in &self.content_items {
+            match item {
+                DynamicToolCallOutputContentItem::InputText { text } => {
+                    let rendered =
+                        format_and_truncate_tool_result(text, TOOL_CALL_MAX_LINES, width);
+                    lines.extend(
+                        rendered
+                            .split('\n')
+                            .map(|segment| Line::from(segment.to_string())),
+                    );
+                }
+                DynamicToolCallOutputContentItem::InputImage { .. } => {
+                    lines.push(Line::from("<image content>"));
+                }
+            }
+        }
+        lines
+    }
+}
+
+impl HistoryCell for DynamicToolCallCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let bullet = match (&self.status, self.success) {
+            (DynamicToolCallStatus::Failed, _) => "•".red().bold(),
+            (_, Some(false)) => "•".red().bold(),
+            (_, Some(true)) => "•".green().bold(),
+            _ => "•".dim(),
+        };
+        let header_text = match self.status {
+            DynamicToolCallStatus::InProgress => "Calling",
+            _ => "Called",
+        };
+
+        let invocation_line = self.invocation_line();
+        let mut compact_spans = vec![bullet, " ".into(), header_text.bold(), " ".into()];
+        let mut compact_header = Line::from(compact_spans.clone());
+        let reserved = compact_header.width();
+        let inline_invocation =
+            invocation_line.width() <= (width as usize).saturating_sub(reserved);
+
+        let mut lines = Vec::new();
+        if inline_invocation {
+            compact_header.extend(invocation_line.spans);
+            lines.push(compact_header);
+        } else {
+            compact_spans.pop();
+            lines.push(Line::from(compact_spans));
+
+            let opts = RtOptions::new((width as usize).saturating_sub(4))
+                .initial_indent("".into())
+                .subsequent_indent("    ".into());
+            let wrapped = adaptive_wrap_line(&invocation_line, opts);
+            let body_lines: Vec<Line<'static>> = wrapped.iter().map(line_to_static).collect();
+            lines.extend(prefix_lines(body_lines, "  └ ".dim(), "    ".into()));
+        }
+
+        let detail_wrap_width = (width as usize).saturating_sub(4).max(1);
+        let mut detail_lines = Vec::new();
+        for line in self.rendered_content_lines(detail_wrap_width) {
+            let line = Line::from(render_line_plain_text(&line).dim());
+            let wrapped = adaptive_wrap_line(
+                &line,
+                RtOptions::new(detail_wrap_width)
+                    .initial_indent("".into())
+                    .subsequent_indent("    ".into()),
+            );
+            detail_lines.extend(wrapped.iter().map(line_to_static));
+        }
+
+        if !detail_lines.is_empty() {
+            let initial_prefix: Span<'static> = if inline_invocation {
+                "  └ ".dim()
+            } else {
+                "    ".into()
+            };
+            lines.extend(prefix_lines(detail_lines, initial_prefix, "    ".into()));
+        }
+
+        lines
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        let header_text = if self.completed() { "Called" } else { "Calling" };
+        let invocation = render_line_plain_text(&self.invocation_line());
+        let mut lines = vec![Line::from(format!("{header_text} {invocation}"))];
+        lines.extend(self.rendered_content_lines(RAW_TOOL_OUTPUT_WIDTH));
+        lines
+    }
+}
+
+fn render_line_plain_text(line: &Line<'_>) -> String {
+    line.spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>()
+}
+
+pub(crate) fn new_dynamic_tool_call(
+    namespace: Option<String>,
+    tool: String,
+    arguments: serde_json::Value,
+    status: DynamicToolCallStatus,
+    content_items: Option<Vec<DynamicToolCallOutputContentItem>>,
+    success: Option<bool>,
+) -> DynamicToolCallCell {
+    DynamicToolCallCell {
+        namespace,
+        tool,
+        arguments,
+        status,
+        content_items: content_items.unwrap_or_default(),
+        success,
+    }
+}
+
 fn web_search_header(completed: bool) -> &'static str {
     if completed {
         "Searched"
@@ -3572,6 +3726,29 @@ mod tests {
 
     fn render_transcript(cell: &dyn HistoryCell) -> Vec<String> {
         render_lines(&cell.transcript_lines(u16::MAX))
+    }
+
+    #[test]
+    fn dynamic_tool_call_failed_status_renders_red_bullet() {
+        let cell = new_dynamic_tool_call(
+            None,
+            "code_bridge".to_string(),
+            serde_json::json!({"action":"collect"}),
+            DynamicToolCallStatus::Failed,
+            Some(vec![DynamicToolCallOutputContentItem::InputText {
+                text: "request failed".to_string(),
+            }]),
+            None,
+        );
+
+        let lines = cell.display_lines(80);
+        assert_eq!(
+            render_lines(&lines).join("\n"),
+            "• Called code_bridge({\"action\":\"collect\"})\n  └ request failed"
+        );
+        let bullet = lines[0].spans.first().expect("header starts with bullet");
+        assert_eq!(bullet.style.fg, Some(Color::Red));
+        assert!(bullet.style.add_modifier.contains(Modifier::BOLD));
     }
 
     fn assert_unstyled_lines(lines: &[Line<'static>]) {

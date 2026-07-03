@@ -55,6 +55,22 @@ fn content_items_to_text_ignores_image_only_content() {
 }
 
 #[test]
+fn summarization_prompt_mentions_code_bridge_evidence_kinds() {
+    // Structural tripwire: behavioral preservation depends on collected bridge
+    // evidence being present in the transcript sent to the compacting model.
+    assert!(
+        SUMMARIZATION_PROMPT.contains("Code Bridge"),
+        "compact prompt should explicitly preserve collected bridge context"
+    );
+    for evidence_kind in ["console", "error", "pageview", "screenshot", "control"] {
+        assert!(
+            SUMMARIZATION_PROMPT.contains(evidence_kind),
+            "compact prompt should mention {evidence_kind} evidence"
+        );
+    }
+}
+
+#[test]
 fn collect_user_messages_extracts_user_text_only() {
     let items = vec![
         ResponseItem::Message {

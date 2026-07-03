@@ -22,11 +22,11 @@
         "request": 0,
         "scope": "input",
         "count": {
-          "### Available skills": 1,
-          "- implicit-skill: Implicit skill": 1,
-          "- manual-skill: Manual skill": 0,
-          "<name>manual-skill</name>": 1,
-          "MANUAL_SKILL_BODY_MARKER": 1
+                    "### Available skills": 1,
+                    "- implicit-skill: Implicit skill": 1,
+                    "- manual-skill: Manual skill": 1,
+                    "<name>manual-skill</name>": 1,
+                    "MANUAL_SKILL_BODY_MARKER": 1
         }
       }
     ]

@@ -98,6 +98,8 @@ fi
 echo "guards=${status_guards}" >> "$guards_log"
 
 # STEP 4: Branding guard parity with CI (non-fixing check)
+# Product-facing TUI files live in code-rs. codex-rs remains the read-only
+# upstream mirror and is not the target for Every Code branding edits.
 {
   echo "[verify] STEP 4: branding guard (TUI user-visible)"
 }
@@ -105,7 +107,7 @@ DEFAULT_BRANCH_LOCAL=${DEFAULT_BRANCH:-main}
 # Try to fetch origin to ensure refs exist; ignore failure for local runs
 git fetch origin "$DEFAULT_BRANCH_LOCAL" >/dev/null 2>&1 || true
 range_ref="origin/${DEFAULT_BRANCH_LOCAL}..HEAD"
-changed_files=$(git diff --name-only $range_ref -- 'codex-rs/tui/**' | tr '\n' ' ' || true)
+changed_files=$(git diff --name-only $range_ref -- 'code-rs/tui/**' | tr '\n' ' ' || true)
 branding_log=.github/auto/VERIFY_branding.log
 : > "$branding_log"
 if [ -n "${changed_files:-}" ]; then

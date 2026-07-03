@@ -639,6 +639,10 @@ impl ChatWidget {
                 "{} out",
                 format_tokens_compact(self.status_line_total_usage().output_tokens)
             )),
+            StatusLineItem::PromptCacheHitRate => self
+                .status_line_total_usage()
+                .prompt_cache_hit_rate_percent()
+                .map(|hit_rate| format!("cache {hit_rate}%")),
             StatusLineItem::SessionId => self.thread_id.map(|id| id.to_string()),
             StatusLineItem::FastMode => Some(
                 if matches!(self.current_service_tier(), Some(ServiceTier::Fast)) {
@@ -687,6 +691,7 @@ impl ChatWidget {
             StatusSurfacePreviewItem::UsedTokens => StatusLineItem::UsedTokens,
             StatusSurfacePreviewItem::TotalInputTokens => StatusLineItem::TotalInputTokens,
             StatusSurfacePreviewItem::TotalOutputTokens => StatusLineItem::TotalOutputTokens,
+            StatusSurfacePreviewItem::PromptCacheHitRate => StatusLineItem::PromptCacheHitRate,
             StatusSurfacePreviewItem::SessionId => StatusLineItem::SessionId,
             StatusSurfacePreviewItem::FastMode => StatusLineItem::FastMode,
             StatusSurfacePreviewItem::RawOutput => StatusLineItem::RawOutput,

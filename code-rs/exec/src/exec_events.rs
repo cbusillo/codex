@@ -1,4 +1,5 @@
 use codex_protocol::models::WebSearchAction;
+use codex_protocol::config_types::ApprovalsReviewer;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
@@ -40,6 +41,8 @@ pub enum ThreadEvent {
 pub struct ThreadStartedEvent {
     /// The identified of the new thread. Can be used to resume the thread later.
     pub thread_id: String,
+    /// Who reviews approval requests for this thread.
+    pub approvals_reviewer: ApprovalsReviewer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, Default)]

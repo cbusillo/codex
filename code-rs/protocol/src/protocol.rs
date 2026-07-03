@@ -1988,6 +1988,9 @@ pub struct TokenUsage {
     pub input_tokens: i64,
     #[ts(type = "number")]
     pub cached_input_tokens: i64,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_input_tokens_reported: Option<bool>,
     #[ts(type = "number")]
     pub output_tokens: i64,
     #[ts(type = "number")]
@@ -2162,6 +2165,15 @@ impl TokenUsage {
     pub fn add_assign(&mut self, other: &TokenUsage) {
         self.input_tokens += other.input_tokens;
         self.cached_input_tokens += other.cached_input_tokens;
+        self.cached_input_tokens_reported = match (
+            self.cached_input_tokens_reported,
+            other.cached_input_tokens_reported,
+        ) {
+            (Some(true), _) | (_, Some(true)) => Some(true),
+            (Some(false), Some(false)) => Some(false),
+            (Some(false), None) | (None, Some(false)) => Some(false),
+            (None, None) => None,
+        };
         self.output_tokens += other.output_tokens;
         self.reasoning_output_tokens += other.reasoning_output_tokens;
         self.total_tokens += other.total_tokens;
@@ -5381,6 +5393,7 @@ mod tests {
             output_tokens: 0,
             reasoning_output_tokens: 0,
             total_tokens: 10,
+            ..Default::default()
         });
 
         let info = TokenUsageInfo::new_or_append(&initial, &last, Some(128_000))
@@ -5402,6 +5415,7 @@ mod tests {
             output_tokens: 0,
             reasoning_output_tokens: 0,
             total_tokens: 10,
+            ..Default::default()
         });
 
         let info =
@@ -5409,5 +5423,33 @@ mod tests {
                 .expect("new_or_append should return info");
 
         assert_eq!(info.model_context_window, Some(258_400));
+    }
+
+    #[test]
+    fn token_usage_add_assign_merges_cached_input_telemetry_presence() {
+        fn usage(reported: Option<bool>) -> TokenUsage {
+            TokenUsage {
+                input_tokens: 1,
+                total_tokens: 1,
+                cached_input_tokens_reported: reported,
+                ..Default::default()
+            }
+        }
+
+        for (left, right, expected) in [
+            (None, None, None),
+            (Some(false), None, Some(false)),
+            (None, Some(false), Some(false)),
+            (Some(false), Some(false), Some(false)),
+            (Some(true), None, Some(true)),
+            (None, Some(true), Some(true)),
+            (Some(false), Some(true), Some(true)),
+            (Some(true), Some(false), Some(true)),
+        ] {
+            let mut aggregate = usage(left);
+            aggregate.add_assign(&usage(right));
+
+            assert_eq!(aggregate.cached_input_tokens_reported, expected);
+        }
     }
 }

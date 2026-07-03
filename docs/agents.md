@@ -65,10 +65,11 @@ When you ask the Every Code agent to "ask agents" or gather dissent, it should p
 - Subagent editor: configure per-command agent lists, read-only flag, and instructions. Built-in `/plan` `/solve` `/code` can be overridden the same way.
 - Model pickers are modal and return to the invoking section after selection.
 
-## Auto Drive interaction
-- Auto Drive uses the `agents_enabled` toggle in its settings pane; when off, the coordinator skips agent batches.
-- If no git repo exists, Auto Drive instructs all agents to run read-only.
-- `AUTO_AGENTS.md` is read alongside `AGENTS.md` for Auto Drive–specific guidance.
+## Goal-mode interaction
+- Standalone Auto Drive is retired; do not add Auto Drive-specific agent toggles
+  or `AUTO_AGENTS.md` loading.
+- Goal-mode agent delegation uses the normal Every Code agent settings and the
+  existing read-only safeguards.
 
 ## AGENTS.md and project memory
 - Every Code loads AGENTS.md files along the path (global, repo root, cwd) up to 32 KiB total; deeper files override higher-level ones.
@@ -94,7 +95,8 @@ When you ask the Every Code agent to "ask agents" or gather dissent, it should p
 ## Headless `code exec`
 - `code exec --json` streams JSONL events (agent turns included).
 - `--output-schema <schema.json>` enforces structured JSON output; combine with `--output-last-message` to capture only the final payload.
-- `code exec` defaults to read-only; add `--full-auto` plus a writable sandbox to permit edits.
+- `code exec` defaults to read-only; use a writable sandbox and the explicit
+  bypass flag only for agents that are allowed to edit.
 
 ## Quick examples
 - Custom agent:

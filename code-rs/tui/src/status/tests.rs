@@ -981,7 +981,7 @@ async fn status_snapshot_hides_when_has_no_credits_flag() {
 }
 
 #[tokio::test]
-async fn status_card_token_usage_excludes_cached_tokens() {
+async fn status_card_token_usage_shows_prompt_cache_hit_rate() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home).await;
     config.model = Some("gpt-5.1-codex-max".to_string());
@@ -1021,8 +1021,56 @@ async fn status_card_token_usage_excludes_cached_tokens() {
     let rendered = render_lines(&composite.display_lines(/*width*/ 120));
 
     assert!(
-        rendered.iter().all(|line| !line.contains("cached")),
-        "cached tokens should not be displayed, got: {rendered:?}"
+        rendered
+            .iter()
+            .any(|line| line.contains("Token usage:") && line.contains("cache 17%")),
+        "expected prompt-cache hit rate in token usage, got: {rendered:?}"
+    );
+}
+
+#[tokio::test]
+async fn status_card_token_usage_omits_prompt_cache_when_no_cached_tokens() {
+    let temp_home = TempDir::new().expect("temp home");
+    let mut config = test_config(&temp_home).await;
+    config.model = Some("gpt-5.1-codex-max".to_string());
+    config.cwd = test_path_buf("/workspace/tests").abs();
+
+    let account_display = test_status_account_display();
+    let usage = TokenUsage {
+        input_tokens: 1_200,
+        cached_input_tokens: 0,
+        output_tokens: 900,
+        reasoning_output_tokens: 0,
+        total_tokens: 2_100,
+    };
+
+    let now = chrono::Local
+        .with_ymd_and_hms(2024, 1, 1, 0, 0, 0)
+        .single()
+        .expect("timestamp");
+
+    let model_slug = crate::legacy_core::test_support::get_model_offline(config.model.as_deref());
+    let token_info = token_info_for(&model_slug, &config, &usage);
+    let composite = new_status_output(
+        &config,
+        account_display.as_ref(),
+        Some(&token_info),
+        &usage,
+        &None,
+        /*thread_name*/ None,
+        /*forked_from*/ None,
+        /*rate_limits*/ None,
+        None,
+        now,
+        &model_slug,
+        /*collaboration_mode*/ None,
+        /*reasoning_effort_override*/ None,
+    );
+    let rendered = render_lines(&composite.display_lines(/*width*/ 120));
+
+    assert!(
+        rendered.iter().all(|line| !line.contains("cache")),
+        "prompt-cache hit rate should be omitted without cached input, got: {rendered:?}"
     );
 }
 

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import shlex
 import socketserver
 import subprocess
 import sys
@@ -146,6 +147,18 @@ def contains_text(value: Any, needle: str) -> bool:
     if isinstance(value, dict):
         return any(contains_text(item, needle) for item in value.values())
     return False
+
+
+def matches_json_fragment(value: Any, expected: Any) -> bool:
+    if isinstance(expected, dict):
+        if not isinstance(value, dict):
+            return False
+        return all(key in value and matches_json_fragment(value[key], child) for key, child in expected.items())
+    if isinstance(expected, list):
+        if not isinstance(value, list) or len(expected) > len(value):
+            return False
+        return all(matches_json_fragment(actual, child) for actual, child in zip(value, expected))
+    return value == expected
 
 
 def count_text(value: Any, needle: str) -> int:
@@ -312,6 +325,12 @@ def materialize_workspace(scenario: dict[str, Any], paths: RunPaths) -> None:
 def materialize_skills(scenario: dict[str, Any], paths: RunPaths, scenario_dir: Path, extra_roots: list[Path]) -> None:
     skills_dir = paths.code_home / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
+    workspace_skills = paths.workspace / ".code" / "skills"
+    if workspace_skills.is_dir():
+        for child in sorted(workspace_skills.iterdir()):
+            if child.is_dir() and (child / "SKILL.md").is_file():
+                copy_or_link(child, skills_dir / child.name, symlink=True)
+
     roots: list[Path] = []
     for value in scenario.get("skill_roots", []):
         roots.append(resolve_path(str(value), scenario_dir))
@@ -556,8 +575,24 @@ def write_fake_gh(scenario: dict[str, Any], paths: RunPaths) -> dict[str, Path] 
     shim = paths.bin_dir / "gh"
     put_text(shim, FAKE_GH)
     shim.chmod(0o755)
-    put_text(paths.shell_home / ".zshenv", f"gh() {{ {shim} \"$@\"; }}\n")
+    quoted_shim = shlex.quote(str(shim))
+    put_text(paths.shell_home / ".zshenv", f"gh() {{ {quoted_shim} \"$@\"; }}\n")
     return {"fixture": fixture_path, "log": log_path, "state": state_path}
+
+
+def code_exec_supports_option(code_bin: Path, option: str) -> bool:
+    try:
+        result = subprocess.run(
+            [str(code_bin), "exec", "--help"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return option in f"{result.stdout}\n{result.stderr}"
 
 
 def build_command(scenario: dict[str, Any], args: argparse.Namespace, paths: RunPaths) -> list[str]:
@@ -570,6 +605,7 @@ def build_command_for_prompt(
     paths: RunPaths,
     prompt: str,
     resume_session_id: str | None,
+    fake_responses_base_url: str | None = None,
 ) -> list[str]:
     code_bin_value = args.code_bin or shutil.which("code")
     if not code_bin_value:
@@ -577,13 +613,11 @@ def build_command_for_prompt(
     code_bin = Path(code_bin_value)
     command = [str(code_bin), "exec", "--json", "--skip-git-repo-check"]
     max_seconds = scenario.get("max_seconds", args.max_seconds)
-    if max_seconds:
+    if max_seconds and code_exec_supports_option(code_bin, "--max-seconds"):
         command.extend(["--max-seconds", str(max_seconds)])
     command.extend(["-C", str(paths.workspace)])
     if scenario.get("include_plan_tool", False):
         command.append("--include-plan-tool")
-    if scenario.get("auto", False):
-        command.append("--auto")
     if scenario.get("auto_review", False):
         command.append("--auto-review")
     model = scenario.get("model") or args.model
@@ -592,6 +626,8 @@ def build_command_for_prompt(
     sandbox = scenario.get("sandbox") or args.sandbox
     if sandbox:
         command.extend(["--sandbox", str(sandbox)])
+    if fake_responses_base_url:
+        command.extend(["-c", f"openai_base_url={json.dumps(fake_responses_base_url)}"])
     for override in scenario.get("config_overrides", []):
         command.extend(["-c", str(override)])
     if resume_session_id:
@@ -716,6 +752,7 @@ def summarize(events: list[dict[str, Any]], paths: RunPaths, returncode: int, co
         "returncode": returncode,
         "thread_id": thread_id,
         "usage": usage,
+        "events": events,
         "event_count": len(events),
         "final_message": final_message,
         "commands": commands,
@@ -806,6 +843,210 @@ def request_assertion_target(request: dict[str, Any], assertion: dict[str, Any])
     raise HarnessError(f"unsupported responses assertion scope: {scope}")
 
 
+def workspace_root_from_summary(summary: dict[str, Any]) -> Path:
+    run_dir = summary.get("run_dir")
+    if not isinstance(run_dir, str):
+        raise HarnessError("summary is missing run_dir")
+    return Path(run_dir) / "workspace"
+
+
+def workspace_path_from_summary(summary: dict[str, Any], relative_path: str) -> Path:
+    path = Path(relative_path)
+    if path.is_absolute() or ".." in path.parts:
+        raise HarnessError(f"workspace file expectation path must be relative: {relative_path}")
+    return workspace_root_from_summary(summary) / path
+
+
+def workspace_file_expectation_failures(summary: dict[str, Any], assertion: dict[str, Any]) -> list[str]:
+    relative_path = str(assertion.get("path", ""))
+    if not relative_path:
+        return ["workspace_files expectation is missing path"]
+    try:
+        path = workspace_path_from_summary(summary, relative_path)
+    except HarnessError as exc:
+        return [str(exc)]
+
+    expected_exists = assertion.get("exists")
+    if expected_exists is not None and path.exists() != bool(expected_exists):
+        return [f"workspace file {relative_path!r} exists expected {bool(expected_exists)}, got {path.exists()}"]
+    if not path.exists():
+        return []
+    if not path.is_file():
+        return [f"workspace path {relative_path!r} is not a file"]
+
+    contents = read_text(path)
+    failures = []
+    if "equals" in assertion and contents != str(assertion["equals"]):
+        failures.append(f"workspace file {relative_path!r} did not equal expected contents")
+    if "contains" in assertion and str(assertion["contains"]) not in contents:
+        failures.append(f"workspace file {relative_path!r} did not contain {assertion['contains']!r}")
+    for needle in assertion.get("contains_all", []):
+        if str(needle) not in contents:
+            failures.append(f"workspace file {relative_path!r} did not contain {needle!r}")
+    if "not_contains" in assertion and str(assertion["not_contains"]) in contents:
+        failures.append(f"workspace file {relative_path!r} unexpectedly contained {assertion['not_contains']!r}")
+    return failures
+
+
+def workspace_git_status_failures(summary: dict[str, Any], assertion: dict[str, Any]) -> list[str]:
+    try:
+        workspace = workspace_root_from_summary(summary)
+    except HarnessError as exc:
+        return [str(exc)]
+    result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=workspace,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    status = result.stdout
+    if result.returncode != 0:
+        return [f"git status failed in harness workspace: {result.stderr.strip()}"]
+    failures = []
+    if "equals" in assertion and status != str(assertion["equals"]):
+        failures.append("workspace git status did not equal expected output")
+    for needle in assertion.get("contains_all", []):
+        if str(needle) not in status:
+            failures.append(f"workspace git status did not contain {needle!r}")
+    if "not_contains" in assertion and str(assertion["not_contains"]) in status:
+        failures.append(f"workspace git status unexpectedly contained {assertion['not_contains']!r}")
+    return failures
+
+
+def request_input_items(request: dict[str, Any]) -> list[dict[str, Any]]:
+    body = request.get("body")
+    if not isinstance(body, dict):
+        return []
+    input_items = body.get("input")
+    if not isinstance(input_items, list):
+        return []
+    return [item for item in input_items if isinstance(item, dict)]
+
+
+def function_call_output_text(request: dict[str, Any], call_id: str) -> str | None:
+    for item in request_input_items(request):
+        if item.get("type") != "function_call_output" or item.get("call_id") != call_id:
+            continue
+        output = item.get("output")
+        if isinstance(output, str):
+            return output
+        if isinstance(output, list):
+            text_parts = []
+            for content in output:
+                if isinstance(content, dict) and isinstance(content.get("text"), str):
+                    text_parts.append(content["text"])
+            return "\n".join(text_parts)
+    return None
+
+
+def contains_any(value: str, needles: Any) -> bool:
+    return isinstance(needles, list) and any(str(needle) in value for needle in needles)
+
+
+def command_event_matches(event: dict[str, Any], assertion: dict[str, Any]) -> bool:
+    command = ""
+    output = ""
+    status = None
+    exit_code = None
+
+    item = event.get("item")
+    if isinstance(item, dict) and item.get("type") == "command_execution":
+        command = str(item.get("command") or "")
+        status = item.get("status")
+        exit_code = item.get("exit_code")
+        output = str(item.get("aggregated_output") or "")
+    else:
+        raw_msg = event.get("msg")
+        msg: dict[str, Any] = raw_msg if isinstance(raw_msg, dict) else {}
+        msg_type = msg.get("type")
+        if msg_type == "exec_command_begin":
+            raw_command = msg.get("command", [])
+            command = " ".join(raw_command) if isinstance(raw_command, list) else str(raw_command)
+            status = "started"
+        elif msg_type == "exec_command_output_delta":
+            chunk = msg.get("chunk")
+            if isinstance(chunk, list):
+                try:
+                    output = bytes(int(part) for part in chunk).decode("utf-8", errors="replace")
+                except (TypeError, ValueError):
+                    output = str(chunk)
+            else:
+                output = str(chunk or "")
+            status = "output"
+        elif msg_type == "exec_command_end":
+            raw_command = msg.get("command", [])
+            command = " ".join(raw_command) if isinstance(raw_command, list) else str(raw_command)
+            exit_code = msg.get("exit_code")
+            status = "completed" if exit_code == 0 else "failed"
+            output = "\n".join(str(msg.get(key) or "") for key in ("stdout", "stderr"))
+        else:
+            return False
+
+    if "command_contains" in assertion and str(assertion["command_contains"]) not in command:
+        return False
+    if "output_contains" in assertion and not output:
+        return False
+    if "status" in assertion and str(status) != str(assertion["status"]):
+        return False
+    if "status_any" in assertion:
+        allowed_statuses = assertion["status_any"]
+        if not isinstance(allowed_statuses, list) or str(status) not in {str(candidate) for candidate in allowed_statuses}:
+            return False
+    if "exit_code" in assertion and exit_code != assertion["exit_code"]:
+        return False
+    for needle in assertion.get("output_contains", []):
+        if str(needle) not in output:
+            return False
+    return True
+
+
+def event_count_matches(actual_counts: dict[str, int], key: str, expected: Any) -> bool:
+    if isinstance(expected, list):
+        return any(event_count_matches(actual_counts, key, candidate) for candidate in expected)
+    return actual_counts.get(key, 0) == int(expected)
+
+
+def event_count_failure(key: str, expected: Any, actual_counts: dict[str, int]) -> str:
+    if isinstance(expected, list):
+        values = ", ".join(str(candidate) for candidate in expected)
+        return f"event count for {key!r} expected one of [{values}], got {actual_counts.get(key, 0)}"
+    return f"event count for {key!r} expected {expected}, got {actual_counts.get(key, 0)}"
+
+
+def collect_event_counts(events: Any) -> dict[str, int]:
+    actual_counts: dict[str, int] = {}
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        event_type = event.get("type")
+        if isinstance(event_type, str):
+            actual_counts[event_type] = actual_counts.get(event_type, 0) + 1
+        msg = event.get("msg")
+        if isinstance(msg, dict):
+            msg_type = msg.get("type")
+            if isinstance(msg_type, str):
+                key = f"msg.{msg_type}"
+                actual_counts[key] = actual_counts.get(key, 0) + 1
+        item = event.get("item")
+        if isinstance(item, dict):
+            item_type = item.get("type")
+            if isinstance(item_type, str):
+                key = f"item.{item_type}"
+                actual_counts[key] = actual_counts.get(key, 0) + 1
+    return actual_counts
+
+
+def event_count_set_failures(event_counts: dict[str, Any], actual_counts: dict[str, int]) -> list[str]:
+    failures = []
+    for event_type, expected in event_counts.items():
+        event_type_key = str(event_type)
+        if not event_count_matches(actual_counts, event_type_key, expected):
+            failures.append(event_count_failure(event_type_key, expected, actual_counts))
+    return failures
+
+
 def assert_expectations(summary: dict[str, Any], scenario: dict[str, Any]) -> list[str]:
     failures: list[str] = []
     expect = scenario.get("expect", {})
@@ -836,6 +1077,54 @@ def assert_expectations(summary: dict[str, Any], scenario: dict[str, Any]) -> li
         expected = int(expect["responses_request_count"])
         if actual != expected:
             failures.append(f"responses request count expected {expected}, got {actual}")
+    for assertion in expect.get("workspace_files", []):
+        if not isinstance(assertion, dict):
+            failures.append("workspace_files expectation entries must be objects")
+            continue
+        failures.extend(workspace_file_expectation_failures(summary, assertion))
+    for assertion in expect.get("workspace_git_status", []):
+        if not isinstance(assertion, dict):
+            failures.append("workspace_git_status expectation entries must be objects")
+            continue
+        failures.extend(workspace_git_status_failures(summary, assertion))
+    for assertion in expect.get("command_events", []):
+        if not isinstance(assertion, dict):
+            failures.append("command_events expectation entries must be objects")
+            continue
+        if not any(
+            command_event_matches(event, assertion)
+            for event in summary.get("events", [])
+            if isinstance(event, dict)
+        ):
+            failures.append(f"no command event matched {assertion!r}")
+    for assertion in expect.get("events", []):
+        if not isinstance(assertion, dict):
+            failures.append("events expectation entries must be objects")
+            continue
+        if not any(
+            matches_json_fragment(event, assertion)
+            for event in summary.get("events", [])
+            if isinstance(event, dict)
+        ):
+            failures.append(f"no event matched {assertion!r}")
+    event_counts = expect.get("event_count")
+    actual_event_counts = collect_event_counts(summary.get("events", []))
+    if isinstance(event_counts, dict):
+        failures.extend(event_count_set_failures(event_counts, actual_event_counts))
+    event_count_any = expect.get("event_count_any")
+    if isinstance(event_count_any, list):
+        alternatives = [alternative for alternative in event_count_any if isinstance(alternative, dict)]
+        if not alternatives:
+            failures.append("event_count_any must contain at least one object")
+        elif not any(
+            not event_count_set_failures(alternative, actual_event_counts)
+            for alternative in alternatives
+        ):
+            detail = "; ".join(
+                ", ".join(event_count_set_failures(alternative, actual_event_counts))
+                for alternative in alternatives
+            )
+            failures.append(f"no event_count_any alternative matched: {detail}")
     for assertion in expect.get("responses", []):
         if not isinstance(assertion, dict):
             failures.append("responses expectation entries must be objects")
@@ -878,6 +1167,29 @@ def assert_expectations(summary: dict[str, Any], scenario: dict[str, Any]) -> li
                     failures.append(
                         f"responses request {assertion.get('request', 0)} count for {needle!r} expected {expected}, got {actual}"
                     )
+    for assertion in expect.get("function_call_outputs", []):
+        if not isinstance(assertion, dict):
+            failures.append("function_call_outputs expectation entries must be objects")
+            continue
+        try:
+            request = request_at(summary, int(assertion.get("request", 0)))
+        except HarnessError as exc:
+            failures.append(str(exc))
+            continue
+        call_id = str(assertion.get("call_id", ""))
+        output = function_call_output_text(request, call_id)
+        if output is None:
+            failures.append(f"missing function_call_output for call_id {call_id!r}")
+            continue
+        for needle in assertion.get("contains_all", []):
+            if str(needle) not in output:
+                failures.append(f"function_call_output {call_id!r} did not contain {needle!r}")
+        if "contains_any" in assertion and not contains_any(output, assertion["contains_any"]):
+            failures.append(f"function_call_output {call_id!r} did not contain any of {assertion['contains_any']!r}")
+        if "not_contains" in assertion and str(assertion["not_contains"]) in output:
+            failures.append(
+                f"function_call_output {call_id!r} unexpectedly contained {assertion['not_contains']!r}"
+            )
     return failures
 
 
@@ -942,7 +1254,8 @@ def run_scenario(path: Path, args: argparse.Namespace) -> int:
             last_returncode = 0
             for index, turn in enumerate(turn_prompts, start=1):
                 prompt = str(turn.get("prompt", "") if isinstance(turn, dict) else turn)
-                command = build_command_for_prompt(scenario, args, paths, prompt, session_id)
+                fake_base_url = fake_server.base_url if fake_server is not None else None
+                command = build_command_for_prompt(scenario, args, paths, prompt, session_id, fake_base_url)
                 commands.append(command)
                 returncode, events = run_exec_capture(command, scenario, paths, run_env, f"turn-{index}")
                 all_events.extend(events)
@@ -955,7 +1268,17 @@ def run_scenario(path: Path, args: argparse.Namespace) -> int:
                     session_id = session_id_from_summary_or_catalog(turn_summary, paths)
             return last_returncode, all_events, commands
 
-        command = build_command(scenario, args, paths)
+        if fake_server is not None:
+            command = build_command_for_prompt(
+                scenario,
+                args,
+                paths,
+                str(scenario.get("prompt", "")),
+                None,
+                fake_server.base_url,
+            )
+        else:
+            command = build_command(scenario, args, paths)
         returncode, events = run_exec_capture(command, scenario, paths, run_env, "turn-1")
         return returncode, events, [command]
 
@@ -987,6 +1310,7 @@ def run_scenario(path: Path, args: argparse.Namespace) -> int:
     summary = summarize(events, paths, returncode, summary_command)
     summary["commands"] = summary.get("commands", [])
     summary["scenario_commands"] = [" ".join(command) for command in commands]
+    summary["events"] = events
     summary["responses_requests"] = responses_requests
     failures = assert_expectations(summary, scenario)
     summary["expectation_failures"] = failures

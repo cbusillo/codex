@@ -29,6 +29,12 @@
           "format": "int64",
           "type": "integer"
         },
+        "cachedInputTokensReported": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "inputTokens": {
           "format": "int64",
           "type": "integer"

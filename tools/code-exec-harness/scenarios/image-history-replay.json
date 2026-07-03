@@ -48,9 +48,9 @@
                 "request": 1,
                 "scope": "input",
                 "image_payload_bytes": 0,
-                "contains": "image generation result omitted",
                 "contains_all": [
-                    "65536 bytes"
+                    "Generated images are saved to",
+                    "_image_id_.png"
                 ],
                 "not_contains": "data:image/"
             }

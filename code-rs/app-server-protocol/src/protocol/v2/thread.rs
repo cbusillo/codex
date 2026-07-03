@@ -1097,6 +1097,9 @@ pub struct TokenUsageBreakdown {
     pub input_tokens: i64,
     #[ts(type = "number")]
     pub cached_input_tokens: i64,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_input_tokens_reported: Option<bool>,
     #[ts(type = "number")]
     pub output_tokens: i64,
     #[ts(type = "number")]
@@ -1109,6 +1112,7 @@ impl From<CoreTokenUsage> for TokenUsageBreakdown {
             total_tokens: value.total_tokens,
             input_tokens: value.input_tokens,
             cached_input_tokens: value.cached_input_tokens,
+            cached_input_tokens_reported: value.cached_input_tokens_reported,
             output_tokens: value.output_tokens,
             reasoning_output_tokens: value.reasoning_output_tokens,
         }

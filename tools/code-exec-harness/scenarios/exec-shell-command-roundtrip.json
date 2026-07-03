@@ -1,0 +1,105 @@
+{
+    "name": "exec-shell-command-roundtrip",
+    "model": "gpt-5.1-codex",
+    "files": {
+        "README.md": "# Shell command roundtrip fixture\n"
+    },
+    "prompt": "Run a shell command that prints harness-shell-ok, then reply with exactly: shell done",
+    "responses_api": {
+        "responses": [
+            {
+                "response_id": "resp-shell-call",
+                "events": [
+                    {
+                        "type": "response.created",
+                        "payload": {
+                            "type": "response.created",
+                            "response": {
+                                "id": "resp-shell-call"
+                            }
+                        }
+                    },
+                    {
+                        "item": {
+                            "type": "function_call",
+                            "call_id": "call-shell-ok",
+                            "name": "shell_command",
+                            "arguments": "{\"command\":\"printf 'harness-shell-ok\\n'\",\"login\":false,\"timeout_ms\":1000}"
+                        }
+                    }
+                ]
+            },
+            {
+                "response_id": "resp-shell-final",
+                "events": [
+                    {
+                        "item": {
+                            "type": "message",
+                            "role": "assistant",
+                            "id": "msg-shell-final",
+                            "content": [
+                                {
+                                    "type": "output_text",
+                                    "text": "shell done"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "expect": {
+        "returncode": 0,
+        "assistant_contains": [
+            "shell done"
+        ],
+        "responses_request_count": 2,
+        "event_count_any": [
+            {
+                "msg.exec_command_begin": 1,
+                "msg.exec_command_output_delta": 1,
+                "msg.agent_message": 1,
+                "msg.task_lifecycle": 2
+            },
+            {
+                "item.command_execution": 2,
+                "item.agent_message": 1,
+                "turn.completed": 1
+            }
+        ],
+        "command_events": [
+            {
+                "command_contains": "harness-shell-ok",
+                "status_any": [
+                    "started",
+                    "completed"
+                ]
+            },
+            {
+                "status_any": [
+                    "output",
+                    "completed"
+                ],
+                "output_contains": [
+                    "harness-shell-ok"
+                ]
+            }
+        ],
+        "function_call_outputs": [
+            {
+                "request": 1,
+                "call_id": "call-shell-ok",
+                "contains_all": [
+                    "harness-shell-ok"
+                ],
+                "contains_any": [
+                    "\"exit_code\":0",
+                    "Exit code: 0"
+                ]
+            }
+        ]
+    },
+    "max_seconds": 30,
+    "timeout_seconds": 90
+}

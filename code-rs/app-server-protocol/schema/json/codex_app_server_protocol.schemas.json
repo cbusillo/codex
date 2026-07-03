@@ -1393,6 +1393,54 @@
             },
             "method": {
               "enum": [
+                "remoteControl/status/read"
+              ],
+              "title": "RemoteControl/status/readRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/RemoteControlStatusReadParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "RemoteControl/status/readRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "remoteControl/enable"
+              ],
+              "title": "RemoteControl/enableRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/RemoteControlEnableParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "RemoteControl/enableRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
                 "mcpServer/oauth/login"
               ],
               "title": "McpServer/oauth/loginRequestMethod",
@@ -12062,12 +12110,23 @@
         "type": "object"
       },
       "PluginListMarketplaceKind": {
-        "enum": [
-          "local",
-          "workspace-directory",
-          "shared-with-me"
-        ],
-        "type": "string"
+        "oneOf": [
+          {
+            "enum": [
+              "local",
+              "workspace-directory",
+              "shared-with-me"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Legacy Desktop catalog filter accepted for startup compatibility.",
+            "enum": [
+              "vertical"
+            ],
+            "type": "string"
+          }
+        ]
       },
       "PluginListParams": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -13304,6 +13363,30 @@
         ],
         "type": "string"
       },
+      "RemoteControlEnableParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "RemoteControlEnableParams",
+        "type": "object"
+      },
+      "RemoteControlEnableResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "environmentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/definitions/v2/RemoteControlConnectionStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "RemoteControlEnableResponse",
+        "type": "object"
+      },
       "RemoteControlStatusChangedNotification": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "description": "Current remote-control connection status and environment id exposed to clients.",
@@ -13322,6 +13405,30 @@
           "status"
         ],
         "title": "RemoteControlStatusChangedNotification",
+        "type": "object"
+      },
+      "RemoteControlStatusReadParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "RemoteControlStatusReadParams",
+        "type": "object"
+      },
+      "RemoteControlStatusReadResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "environmentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/definitions/v2/RemoteControlConnectionStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "RemoteControlStatusReadResponse",
         "type": "object"
       },
       "RequestId": {
@@ -17435,6 +17542,12 @@
           "cachedInputTokens": {
             "format": "int64",
             "type": "integer"
+          },
+          "cachedInputTokensReported": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "inputTokens": {
             "format": "int64",

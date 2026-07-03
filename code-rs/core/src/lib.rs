@@ -10,6 +10,7 @@ mod apps;
 mod arc_monitor;
 mod client;
 mod client_common;
+pub mod code_bridge;
 mod realtime_context;
 mod realtime_conversation;
 mod realtime_prompt;

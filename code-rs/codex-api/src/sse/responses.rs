@@ -150,12 +150,14 @@ struct ResponseCompletedUsage {
 
 impl From<ResponseCompletedUsage> for TokenUsage {
     fn from(val: ResponseCompletedUsage) -> Self {
+        let cached_input_tokens_reported = val.input_tokens_details.is_some();
         TokenUsage {
             input_tokens: val.input_tokens,
             cached_input_tokens: val
                 .input_tokens_details
                 .map(|d| d.cached_tokens)
                 .unwrap_or(0),
+            cached_input_tokens_reported: Some(cached_input_tokens_reported),
             output_tokens: val.output_tokens,
             reasoning_output_tokens: val
                 .output_tokens_details
@@ -726,6 +728,72 @@ mod tests {
                 assert!(end_turn.is_none());
             }
             other => panic!("unexpected third event: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn completed_usage_marks_absent_cached_input_telemetry() {
+        let completed = json!({
+            "type": "response.completed",
+            "response": {
+                "id": "resp1",
+                "usage": {
+                    "input_tokens": 11,
+                    "input_tokens_details": null,
+                    "output_tokens": 7,
+                    "output_tokens_details": null,
+                    "total_tokens": 18
+                }
+            }
+        })
+        .to_string();
+
+        let sse = format!("event: response.completed\ndata: {completed}\n\n");
+        let events = collect_events(&[sse.as_bytes()]).await;
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            Ok(ResponseEvent::Completed {
+                token_usage: Some(token_usage),
+                ..
+            }) => {
+                assert_eq!(token_usage.cached_input_tokens, 0);
+                assert_eq!(token_usage.cached_input_tokens_reported, Some(false));
+            }
+            other => panic!("unexpected completed event: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn completed_usage_marks_reported_zero_cached_input_telemetry() {
+        let completed = json!({
+            "type": "response.completed",
+            "response": {
+                "id": "resp1",
+                "usage": {
+                    "input_tokens": 11,
+                    "input_tokens_details": {"cached_tokens": 0},
+                    "output_tokens": 7,
+                    "output_tokens_details": null,
+                    "total_tokens": 18
+                }
+            }
+        })
+        .to_string();
+
+        let sse = format!("event: response.completed\ndata: {completed}\n\n");
+        let events = collect_events(&[sse.as_bytes()]).await;
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            Ok(ResponseEvent::Completed {
+                token_usage: Some(token_usage),
+                ..
+            }) => {
+                assert_eq!(token_usage.cached_input_tokens, 0);
+                assert_eq!(token_usage.cached_input_tokens_reported, Some(true));
+            }
+            other => panic!("unexpected completed event: {other:?}"),
         }
     }
 

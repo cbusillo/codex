@@ -111,7 +111,7 @@ cat "$context_file" >>"$prompt_file"
 
 echo "Preparing local release metadata for v${new_version} from ${range}"
 echo "Prompt: $prompt_file"
-code exec --cd "$REPO_ROOT" --full-auto --skip-git-repo-check <"$prompt_file"
+code exec --cd "$REPO_ROOT" --sandbox workspace-write --skip-git-repo-check <"$prompt_file"
 scripts/check-release-notes-version.sh --version "$new_version"
 
 echo "Local release metadata is ready for review:"

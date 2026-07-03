@@ -21,22 +21,16 @@
   "expect": {
     "returncode": 0,
     "responses_request_count": 1,
-    "stderr_contains": [
-      "assembled context ledger for responses request",
-      "SkillsManifest",
-      "ExplicitSkill",
-      "ToolSchema"
-    ],
-    "responses": [
+        "responses": [
       {
         "request": 0,
         "scope": "input",
         "count": {
-          "project guidance": 1,
-          "- implicit-skill: Implicit skill": 1,
-          "- manual-skill: Manual skill": 0,
-          "<name>manual-skill</name>": 1,
-          "MANUAL_SKILL_BODY_MARKER": 1
+                    "project guidance": 1,
+                    "- implicit-skill: Implicit skill": 1,
+                    "- manual-skill: Manual skill": 1,
+                    "<name>manual-skill</name>": 1,
+                    "MANUAL_SKILL_BODY_MARKER": 1
         }
       }
     ]

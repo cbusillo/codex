@@ -60,6 +60,7 @@ pub(crate) struct StatusTokenUsageData {
     total: i64,
     input: i64,
     output: i64,
+    prompt_cache_hit_rate_percent: Option<i64>,
     context_window: Option<StatusContextWindowData>,
 }
 
@@ -316,6 +317,7 @@ impl StatusHistoryCell {
             total: total_usage.blended_total(),
             input: total_usage.non_cached_input(),
             output: total_usage.output_tokens,
+            prompt_cache_hit_rate_percent: total_usage.prompt_cache_hit_rate_percent(),
             context_window,
         };
         let rate_limits = if rate_limits.len() <= 1 {
@@ -354,7 +356,7 @@ impl StatusHistoryCell {
         let input_fmt = format_tokens_compact(self.token_usage.input);
         let output_fmt = format_tokens_compact(self.token_usage.output);
 
-        vec![
+        let mut spans = vec![
             Span::from(total_fmt),
             Span::from(" total "),
             Span::from(" (").dim(),
@@ -364,7 +366,14 @@ impl StatusHistoryCell {
             Span::from(output_fmt).dim(),
             Span::from(" output").dim(),
             Span::from(")").dim(),
-        ]
+        ];
+
+        if let Some(hit_rate) = self.token_usage.prompt_cache_hit_rate_percent {
+            spans.push(Span::from(" ").dim());
+            spans.push(Span::from(format!("cache {hit_rate}%")).dim());
+        }
+
+        spans
     }
 
     fn context_window_spans(&self) -> Option<Vec<Span<'static>>> {

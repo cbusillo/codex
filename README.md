@@ -2,42 +2,31 @@
 
 &ensp;
 
-**Every Code** (Code for short) is a fast, local coding agent for your terminal. It owns its product direction, defaults, releases, and UX while preserving useful compatibility with Codex CLI and importing upstream improvements when they make the product better.
+**Every Code** (Code for short) is a fast, local coding agent for your terminal.
+It uses Codex CLI as the upstream substrate and layers Every Code features,
+defaults, releases, and UX on top where they make the product better.
 
 &ensp;
 ## What's new
 
-- **Latest long-session stability sweep** (post-0.6): Auto Drive and Auto Review are now decoupled so background reviews no longer block the command flow. `Esc` returns control immediately and typing works while review finalization continues.
-
-- **Operational upgrades in this cycle**
-  - Auto Review metadata (branch/worktree context) remains queryable through the active Auto Drive session after completion.
-  - Terminal agents are compacted and archived so heavy payloads are reduced while review linkage is preserved.
-  - Core `core`, coordinator, and TUI state maps now have hard caps with bounded drop/trim behavior.
-  - Auto Drive conversation/update queues are bounded in the coordinator; TUI has bounded prompt/agent/runtime caches.
-  - Background review notes are added as non-blocking history-visible notes instead of foreground task-injection.
-  - TUI housekeeping lifecycle is bounded with deterministic stop control.
-  - Stress tests now cover heavy agent churn plus concurrent Auto Review + Esc/typing responsiveness.
-
-- **New/updated models and agents**
-  - Auto Drive CLI model support defaults to `gpt-5.5`, with `medium | high | xhigh` reasoning controls.
-  - Frontline and alias-aware agent model handling now centers on `code-gpt-5.5`, with compatibility alias upgrades for older Codex model names.
-  - Auto Drive decision schema and coordinator payloads now enforce bounded history while preserving goal and recent context.
-
-  See commit `60727b068` and related Auto Drive hardening commits in git history for details.
-
-
-- **Auto Review** – background ghost-commit watcher runs reviews in a separate worktree whenever a turn changes code; uses the configured review model and reports issues plus ready-to-apply fixes without blocking the main thread.
-- **Code Bridge** – Sentry-style local bridge that streams errors, console, screenshots, and control from running apps into Every Code; ships an MCP server.
-- **Plays well with Auto Drive** – reviews run in parallel with long Auto Drive tasks so quality checks land while the flow keeps moving.
-- **Quality-first focus** – the release shifts emphasis from "can the model write this file" to "did we verify it works".
-- _From v0.5.0:_ rename to Every Code, upgraded `/auto` planning/recovery, unified `/settings`, faster streaming/history with card-based activity, and more reliable `/resume` + `/undo`.
+- **Codex CLI substrate alignment** – current development keeps the editable
+  Rust product workspace in `code-rs` close to upstream Codex CLI, with Every
+  Code behavior added as small product-layer overlays.
+- **Code Bridge** – Sentry-style local bridge that streams errors, console,
+  screenshots, and control from running apps into Every Code.
+- **Multi-agent commands** – `/plan`, `/solve`, and `/code` coordinate multiple
+  CLI agents while preserving Codex-shaped execution and session primitives.
+- **Goal-mode direction** – standalone Auto Drive is retired; useful
+  long-running-work behavior should attach to current goal, review, guardian,
+  session, and agent surfaces.
 
  [Read the full notes in RELEASE_NOTES.md](docs/release-notes/RELEASE_NOTES.md)
 
 &ensp;
 ## Why Every Code
 
-- 🚀 **Auto Drive orchestration** – Multi-agent automation that now self-heals and ships complete tasks.
+- 🚀 **Codex-aligned goal mode** – Long-running work builds on upstream-shaped
+  goal, review, session, and agent primitives.
 - 🌐 **Browser Integration** – CDP support, headless browsing, screenshots captured inline.
 - 🤖 **Multi-agent commands** – `/plan`, `/code` and `/solve` coordinate multiple CLI agents.
 - 🧭 **Unified settings hub** – `/settings` overlay for limits, theming, approvals, and provider wiring.
@@ -54,14 +43,6 @@
     <img src="docs/images/video-auto-review-play.jpg" alt="Play Auto Review video" width="100%">
   </a><br>
   <strong>Auto Review</strong>
-</p>
-
-&ensp;
-<p align="center">
-  <a href="https://youtu.be/UOASHZPruQk">
-    <img src="docs/images/video-auto-drive-new-play.jpg" alt="Play Introducing Auto Drive video" width="100%">
-  </a><br>
-  <strong>Auto Drive Overview</strong>
 </p>
 
 &ensp;
@@ -153,15 +134,6 @@ qwen --version
 # Write code! (Claude, Gemini and GPT-5 consensus)
 # Creates multiple worktrees then implements the optimal solution
 /code "Show dark mode when I feel cranky"
-```
-
-### Auto Drive
-```bash
-# Hand off a multi-step task; Auto Drive will coordinate agents and approvals
-/auto "Refactor the auth flow and add device login"
-
-# Resume or inspect an active Auto Drive run
-/auto status
 ```
 
 ### General
@@ -296,7 +268,7 @@ model_reasoning_summary = "detailed"
 ## FAQ
 
 **How is this different from the original?**
-> Every Code is an independent product that keeps useful Codex CLI compatibility while owning its browser integration, multi-agent commands (`/plan`, `/solve`, `/code`), theme system, Auto Drive flows, and release defaults.
+> Every Code uses Codex CLI as the upstream substrate while owning its browser integration, multi-agent commands (`/plan`, `/solve`, `/code`), theme system, Code Bridge, and release defaults.
 
 **Can I use my existing Codex configuration?**
 > Yes. Every Code reads from both `~/.code/` (primary) and legacy `~/.codex/` directories. We only write to `~/.code/`, so Codex will keep running if you switch back; copy or remove legacy files if you notice conflicts.

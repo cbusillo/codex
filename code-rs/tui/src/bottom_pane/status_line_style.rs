@@ -41,7 +41,8 @@ impl StatusLineAccent {
             | StatusLineItem::ContextWindowSize
             | StatusLineItem::UsedTokens
             | StatusLineItem::TotalInputTokens
-            | StatusLineItem::TotalOutputTokens => Self::Usage,
+            | StatusLineItem::TotalOutputTokens
+            | StatusLineItem::PromptCacheHitRate => Self::Usage,
             StatusLineItem::FiveHourLimit | StatusLineItem::WeeklyLimit => Self::Limit,
             StatusLineItem::CodexVersion | StatusLineItem::SessionId => Self::Metadata,
             StatusLineItem::FastMode | StatusLineItem::RawOutput => Self::Mode,

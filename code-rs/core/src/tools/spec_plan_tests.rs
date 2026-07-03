@@ -1203,6 +1203,53 @@ fn test_test_model_info_includes_sync_tool() {
 }
 
 #[test]
+fn experimental_model_info_gates_code_bridge_tool() {
+    let features = Features::with_defaults();
+    let available_models = Vec::new();
+    let default_model_info = model_info();
+    let default_tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &default_model_info,
+        available_models: &available_models,
+        features: &features,
+        image_generation_tool_auth_allowed: true,
+        web_search_mode: Some(WebSearchMode::Cached),
+        session_source: SessionSource::Cli,
+        permission_profile: &PermissionProfile::Disabled,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+    let (default_tools, _) = build_specs(
+        &default_tools_config,
+        /*mcp_tools*/ None,
+        /*deferred_mcp_tools*/ None,
+        &[],
+    );
+    assert_lacks_tool_name(&default_tools, "code_bridge");
+
+    let mut supported_model_info = model_info();
+    supported_model_info.experimental_supported_tools = vec!["code_bridge".to_string()];
+    let supported_tools_config = ToolsConfig::new(&ToolsConfigParams {
+        model_info: &supported_model_info,
+        available_models: &available_models,
+        features: &features,
+        image_generation_tool_auth_allowed: true,
+        web_search_mode: Some(WebSearchMode::Cached),
+        session_source: SessionSource::Cli,
+        permission_profile: &PermissionProfile::Disabled,
+        windows_sandbox_level: WindowsSandboxLevel::Disabled,
+    });
+    let (supported_tools, _) = build_specs(
+        &supported_tools_config,
+        /*mcp_tools*/ None,
+        /*deferred_mcp_tools*/ None,
+        &[],
+    );
+    assert!(
+        supported_tools.iter().any(|tool| tool.name() == "code_bridge"),
+        "expected model-supported code_bridge tool to be registered"
+    );
+}
+
+#[test]
 fn test_build_specs_mcp_tools_converted() {
     let model_info = model_info();
     let mut features = Features::with_defaults();

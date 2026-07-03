@@ -1,0 +1,8 @@
+---
+source: tui/src/chatwidget/tests.rs
+expression: combined
+---
+• Called code_bridge({"action":"collect"})
+  └ {"ok": true, "message": "collected 3 Code Bridge event(s)", "result":
+        {"count": 3, "transcript": "[info] App mounted\n[warn] Slow render
+        120ms\n[error] TypeError: value is null"}}

@@ -1260,6 +1260,25 @@ async fn token_usage_update_refreshes_status_line_with_runtime_context_window() 
 }
 
 #[tokio::test]
+async fn token_usage_update_refreshes_status_line_with_prompt_cache_hit_rate() {
+    let mut app = make_test_app().await;
+    app.chat_widget.setup_status_line(
+        vec![crate::bottom_pane::StatusLineItem::PromptCacheHitRate],
+        /*use_theme_colors*/ true,
+    );
+
+    assert_eq!(app.chat_widget.status_line_text(), None);
+
+    app.handle_thread_event_now(ThreadBufferedEvent::Notification(token_usage_notification(
+        ThreadId::new(),
+        "turn-1",
+        Some(950_000),
+    )));
+
+    assert_eq!(app.chat_widget.status_line_text(), Some("cache 25%".into()));
+}
+
+#[tokio::test]
 async fn open_agent_picker_keeps_missing_threads_for_replay() -> Result<()> {
     let mut app = Box::pin(make_test_app()).await;
     let mut app_server = Box::pin(crate::start_embedded_app_server_for_picker(
@@ -4220,6 +4239,7 @@ fn token_usage_notification(
                 total_tokens: 10,
                 input_tokens: 4,
                 cached_input_tokens: 1,
+                cached_input_tokens_reported: Some(true),
                 output_tokens: 5,
                 reasoning_output_tokens: 0,
             },
@@ -4227,6 +4247,7 @@ fn token_usage_notification(
                 total_tokens: 10,
                 input_tokens: 4,
                 cached_input_tokens: 1,
+                cached_input_tokens_reported: Some(true),
                 output_tokens: 5,
                 reasoning_output_tokens: 0,
             },

@@ -511,6 +511,7 @@ fn token_usage_breakdown(usage: TokenUsage) -> codex_app_server_protocol::TokenU
         total_tokens: usage.total_tokens,
         input_tokens: usage.input_tokens,
         cached_input_tokens: usage.cached_input_tokens,
+        cached_input_tokens_reported: usage.cached_input_tokens_reported,
         output_tokens: usage.output_tokens,
         reasoning_output_tokens: usage.reasoning_output_tokens,
     }
@@ -838,6 +839,57 @@ pub(super) fn handle_image_generation_end(
                 revised_prompt,
                 result: String::new(),
                 saved_path,
+            },
+        }),
+        /*replay_kind*/ None,
+    );
+}
+
+pub(super) fn handle_dynamic_tool_call(
+    chat: &mut ChatWidget,
+    call_id: impl Into<String>,
+    namespace: Option<String>,
+    tool: impl Into<String>,
+    arguments: serde_json::Value,
+    content_items: Vec<AppServerDynamicToolCallOutputContentItem>,
+    success: bool,
+) {
+    handle_dynamic_tool_call_with_status(
+        chat,
+        call_id,
+        namespace,
+        tool,
+        arguments,
+        AppServerDynamicToolCallStatus::Completed,
+        content_items,
+        Some(success),
+    );
+}
+
+pub(super) fn handle_dynamic_tool_call_with_status(
+    chat: &mut ChatWidget,
+    call_id: impl Into<String>,
+    namespace: Option<String>,
+    tool: impl Into<String>,
+    arguments: serde_json::Value,
+    status: AppServerDynamicToolCallStatus,
+    content_items: Vec<AppServerDynamicToolCallOutputContentItem>,
+    success: Option<bool>,
+) {
+    chat.handle_server_notification(
+        ServerNotification::ItemCompleted(ItemCompletedNotification {
+            thread_id: thread_id(chat),
+            turn_id: "turn-1".to_string(),
+            completed_at_ms: 0,
+            item: AppServerThreadItem::DynamicToolCall {
+                id: call_id.into(),
+                namespace,
+                tool: tool.into(),
+                arguments,
+                status,
+                content_items: Some(content_items),
+                success,
+                duration_ms: Some(12),
             },
         }),
         /*replay_kind*/ None,

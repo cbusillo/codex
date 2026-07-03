@@ -15,7 +15,7 @@ expression: sanitized
 │  Permissions:      Custom (workspace with network access, on-request) │
 │  Agents.md:        <none>                                             │
 │                                                                       │
-│  Token usage:      2K total  (1.4K input + 600 output)                │
+│  Token usage:      2K total  (1.4K input + 600 output) cache 7%       │
 │  Context window:   100% left (2.2K used / 272K)                       │
 │  5h limit:         [███████████░░░░░░░░░] 55% left (resets 09:25)     │
 │  Weekly limit:     [██████████████░░░░░░] 70% left (resets 09:55)     │

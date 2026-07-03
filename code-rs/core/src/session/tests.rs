@@ -1672,6 +1672,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
             output_tokens: 20,
             reasoning_output_tokens: 0,
             total_tokens: 30,
+            ..Default::default()
         },
         last_token_usage: TokenUsage {
             input_tokens: 3,
@@ -1679,6 +1680,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
             output_tokens: 4,
             reasoning_output_tokens: 0,
             total_tokens: 7,
+            ..Default::default()
         },
         model_context_window: Some(1_000),
     };
@@ -1689,6 +1691,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
             output_tokens: 200,
             reasoning_output_tokens: 25,
             total_tokens: 375,
+            ..Default::default()
         },
         last_token_usage: TokenUsage {
             input_tokens: 10,
@@ -1696,6 +1699,7 @@ async fn record_initial_history_seeds_token_info_from_rollout() {
             output_tokens: 20,
             reasoning_output_tokens: 5,
             total_tokens: 35,
+            ..Default::default()
         },
         model_context_window: Some(2_000),
     };
@@ -7830,6 +7834,7 @@ fn post_goal_token_usage() -> TokenUsage {
         output_tokens: 30,
         reasoning_output_tokens: 5,
         total_tokens: 75,
+        ..Default::default()
     }
 }
 
@@ -7878,6 +7883,7 @@ async fn budget_limited_accounting_steers_active_turn_without_aborting() -> anyh
             output_tokens: 5,
             reasoning_output_tokens: 0,
             total_tokens: 25,
+            ..Default::default()
         },
     )
     .await;
@@ -7922,6 +7928,7 @@ async fn budget_limited_accounting_steers_active_turn_without_aborting() -> anyh
             output_tokens: 10,
             reasoning_output_tokens: 0,
             total_tokens: 40,
+            ..Default::default()
         },
     )
     .await;
@@ -8048,6 +8055,7 @@ async fn external_active_goal_set_marks_current_turn_for_accounting() -> anyhow:
             output_tokens: 40,
             reasoning_output_tokens: 5,
             total_tokens: 110,
+            ..Default::default()
         },
     )
     .await;

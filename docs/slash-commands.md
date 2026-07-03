@@ -24,8 +24,8 @@ Notes
 - `/logout`: log out of Code.
 - `/login`: manage Code sign-ins (select, add, or disconnect accounts).
 - `/settings [section]`: open the settings panel. Optional section argument
-  jumps directly to `model`, `theme`, `agents`, `skills`, `auto`, `review`,
-  `validation`, `limits`, `chrome`, `mcp`, or `notifications`.
+  jumps directly to `model`, `theme`, `updates`, `agents`, `prompts`, `review`,
+  `planning`, `validation`, `limits`, `chrome`, `mcp`, or `notifications`.
 
 ## Workspace & Git
 
@@ -90,9 +90,6 @@ Notes
 - `/perf (on|off|show|reset)`: performance tracing controls.
 - `/agents`: configure agents and subagent commands (including autonomous
   follow-ups and observer status; available in dev, dev-fast, and perf builds).
-- `/auto [goal]`: start the maintainer-style auto coordinator. If no goal is
-  provided it defaults to "review the git log for recent changes and come up
-  with sensible follow up work".
 
 ## Prompt‑Expanding (Multi‑Agent)
 
@@ -107,8 +104,6 @@ typically start multiple agents. They require a task/problem description.
 
 - `/demo`: populate the chat history with assorted sample cells (available in
   dev and perf builds for UI testing).
-- `/demo auto drive card`: render the Auto Drive card once for each ANSI-16
-  background color so you can compare theme contrast.
 - `/test-approval`: test approval request (available in debug builds only).
 
 Implementation Notes

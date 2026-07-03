@@ -1,9 +1,9 @@
 # TUI Settings Overlay
 
-Full-screen settings panel for Every Code’s TUI. Use it to change models, themes, Auto Drive defaults, agents, notifications, and more without leaving the chat.
+Full-screen settings panel for Every Code’s TUI. Use it to change models, themes, agents, notifications, and more without leaving the chat.
 
 ## Open & navigate
-- `/settings` opens the overview; `/settings <section>` jumps directly (section names below). `/auto settings` and `/update` route into their sections.
+- `/settings` opens the overview; `/settings <section>` jumps directly (section names below). `/update` routes into its section.
 - Keys: `↑/↓` or `j/k` to move, `Tab/Shift+Tab` to cycle sections, `Home/End` jump list ends. Enter opens/activates; Esc closes the current section, Esc again closes the overlay. `?` toggles inline help. Paste is forwarded to the active section when allowed.
 - Overlay is modal: chat input is blocked while it is visible. It remembers the last active section on reopen (`pending_settings_return`).
 
@@ -18,7 +18,6 @@ Full-screen settings panel for Every Code’s TUI. Use it to change models, them
 - **Updates**: view GitHub Release update status, run upgrades, and toggle automatic upgrades. `/update` opens here.
 - **Agents**: see built-in/custom agents, enable/disable, force read-only, add per-agent instructions. Open the Subagent editor to configure `/plan`/`/solve`/`/code` or custom slash commands.
 - **Prompts**: edit saved prompt snippets.
-- **Auto Drive**: set review/agents/QA/cross-check toggles, continue mode (manual/immediate/ten-seconds/sixty-seconds), model override, or “use chat model.” Updates apply to active runs.
 - **Review**: choose a review model (or reuse chat), toggle auto-resolve, and set the max auto-resolve attempts.
 - **Planning**: pick model/effort for planning turns or reuse the chat model.
 - **Validation**: toggle validation groups and tools; see install status; trigger install help.
@@ -39,6 +38,5 @@ Full-screen settings panel for Every Code’s TUI. Use it to change models, them
 
 ## Commands
 - `/settings [section]`
-- `/auto settings`
 - `/update` (or `/update settings`)
 - `/notifications [on|off|status]`

@@ -6,12 +6,23 @@
       "type": "string"
     },
     "PluginListMarketplaceKind": {
-      "enum": [
-        "local",
-        "workspace-directory",
-        "shared-with-me"
-      ],
-      "type": "string"
+      "oneOf": [
+        {
+          "enum": [
+            "local",
+            "workspace-directory",
+            "shared-with-me"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Legacy Desktop catalog filter accepted for startup compatibility.",
+          "enum": [
+            "vertical"
+          ],
+          "type": "string"
+        }
+      ]
     }
   },
   "properties": {

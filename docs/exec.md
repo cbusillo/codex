@@ -8,7 +8,9 @@ code exec "count the total number of lines of code in this project"
 
 In non-interactive mode, Every Code does not ask for command or edit approvals. By default it runs in `read-only` mode, so it cannot edit files or run commands that require network access.
 
-Use `code exec --full-auto` to allow file edits. Use `code exec --sandbox danger-full-access` to allow edits and networked commands.
+Use `code exec --sandbox workspace-write` to allow file edits. Use
+`code exec --dangerously-bypass-approvals-and-sandbox` only when the run should
+have unrestricted filesystem and command access.
 
 ### Default output mode
 

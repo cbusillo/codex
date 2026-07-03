@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "RemoteControlConnectionStatus": {
+      "enum": [
+        "disabled",
+        "connecting",
+        "connected",
+        "errored"
+      ],
+      "type": "string"
+    }
+  },
+  "properties": {
+    "environmentId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "$ref": "#/definitions/RemoteControlConnectionStatus"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "RemoteControlStatusReadResponse",
+  "type": "object"
+}

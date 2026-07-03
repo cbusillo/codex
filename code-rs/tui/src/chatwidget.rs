@@ -1650,6 +1650,7 @@ fn token_usage_info_from_app_server(token_usage: ThreadTokenUsage) -> TokenUsage
             total_tokens: token_usage.total.total_tokens,
             input_tokens: token_usage.total.input_tokens,
             cached_input_tokens: token_usage.total.cached_input_tokens,
+            cached_input_tokens_reported: token_usage.total.cached_input_tokens_reported,
             output_tokens: token_usage.total.output_tokens,
             reasoning_output_tokens: token_usage.total.reasoning_output_tokens,
         },
@@ -1657,6 +1658,7 @@ fn token_usage_info_from_app_server(token_usage: ThreadTokenUsage) -> TokenUsage
             total_tokens: token_usage.last.total_tokens,
             input_tokens: token_usage.last.input_tokens,
             cached_input_tokens: token_usage.last.cached_input_tokens,
+            cached_input_tokens_reported: token_usage.last.cached_input_tokens_reported,
             output_tokens: token_usage.last.output_tokens,
             reasoning_output_tokens: token_usage.last.reasoning_output_tokens,
         },
@@ -6134,6 +6136,26 @@ impl ChatWidget {
             } => {
                 self.on_image_generation_end(id, revised_prompt, saved_path);
             }
+            ThreadItem::DynamicToolCall {
+                namespace,
+                tool,
+                arguments,
+                status,
+                content_items,
+                success,
+                ..
+            } => {
+                self.flush_answer_stream_with_separator();
+                self.add_to_history(history_cell::new_dynamic_tool_call(
+                    namespace,
+                    tool,
+                    arguments,
+                    status,
+                    content_items,
+                    success,
+                ));
+                self.request_redraw();
+            }
             ThreadItem::EnteredReviewMode { review, .. } => {
                 if from_replay {
                     self.enter_review_mode_with_hint(review, /*from_replay*/ true);
@@ -6167,7 +6189,6 @@ impl ChatWidget {
                 reasoning_effort,
                 agents_states,
             }),
-            ThreadItem::DynamicToolCall { .. } => {}
         }
 
         if matches!(replay_kind, Some(ReplayKind::ThreadSnapshot)) && turn_id.is_empty() {

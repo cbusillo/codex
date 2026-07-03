@@ -111,6 +111,9 @@ pub(crate) enum StatusLineItem {
     /// Total output tokens generated.
     TotalOutputTokens,
 
+    /// Prompt-cache hit rate for reported cached input tokens.
+    PromptCacheHitRate,
+
     /// Full session UUID.
     SessionId,
 
@@ -162,6 +165,9 @@ impl StatusLineItem {
             StatusLineItem::UsedTokens => "Total tokens used in session (omitted when zero)",
             StatusLineItem::TotalInputTokens => "Total input tokens used in session",
             StatusLineItem::TotalOutputTokens => "Total output tokens used in session",
+            StatusLineItem::PromptCacheHitRate => {
+                "Prompt-cache hit rate (omitted when no cached input is reported)"
+            }
             StatusLineItem::SessionId => {
                 "Current session identifier (omitted until session starts)"
             }
@@ -193,6 +199,7 @@ impl StatusLineItem {
             StatusLineItem::UsedTokens => StatusSurfacePreviewItem::UsedTokens,
             StatusLineItem::TotalInputTokens => StatusSurfacePreviewItem::TotalInputTokens,
             StatusLineItem::TotalOutputTokens => StatusSurfacePreviewItem::TotalOutputTokens,
+            StatusLineItem::PromptCacheHitRate => StatusSurfacePreviewItem::PromptCacheHitRate,
             StatusLineItem::SessionId => StatusSurfacePreviewItem::SessionId,
             StatusLineItem::FastMode => StatusSurfacePreviewItem::FastMode,
             StatusLineItem::RawOutput => StatusSurfacePreviewItem::RawOutput,

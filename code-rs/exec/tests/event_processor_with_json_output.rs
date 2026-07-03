@@ -131,6 +131,7 @@ fn session_configured_produces_thread_started_event() {
         EventProcessorWithJsonOutput::thread_started_event(&session_configured),
         ThreadEvent::ThreadStarted(ThreadStartedEvent {
             thread_id: "67e55044-10b1-426f-9247-bb680e5fe0c8".to_string(),
+            approvals_reviewer: codex_protocol::config_types::ApprovalsReviewer::User,
         })
     );
 }

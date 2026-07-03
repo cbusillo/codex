@@ -4,6 +4,13 @@ Use this harness as the default proving ground for realistic `code exec`
 behavior when working on token efficiency, prompt/context composition, skills,
 memory, compaction, resume, model routing, tool choice, and GitHub automation.
 
+For Dogfood Parity 1, the deterministic no-token smoke suite is the P0 gate for
+the built `code` binary. Run `just harness-smoke` after `./build-fast.sh`; it
+uses `code-rs/target/dev-fast/code` by default and fails clearly if the binary is
+missing or the covered `code exec --json` contract regresses. Use
+`CODE_EXEC_HARNESS_BIN=/path/to/code just harness-smoke` only when intentionally
+checking another binary.
+
 The goal is effectiveness-adjusted token efficiency: reduce wasted tokens only
 when task success, reliability, instruction following, and useful tool behavior
 are preserved or improved. Saving tokens by making the agent less capable is a

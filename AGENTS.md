@@ -16,9 +16,11 @@ for process/session/tool-execution internals.
 
 Upstream import sources are `just-every/code` and `openai/codex`. Treat
 `just-every/code` as a fork upstream/import source. Treat `openai/codex` / Codex
-CLI as the original/direct upstream and provenance source. `codex-rs` is a
-read-only local mirror of `openai/codex:main`; edit Rust sources under
-`code-rs`, the Every Code product implementation.
+CLI as the original/direct upstream and provenance source. The current product
+architecture is Codex CLI as the substrate with Every Code layered on top.
+Locally, `codex-rs` is a read-only mirror of `openai/codex:main`; edit Rust
+sources under `code-rs`, the Every Code product workspace built on the Codex CLI
+substrate.
 
 `CODE_HOME` / `~/.code` are the primary config and state locations.
 `CODEX_HOME` / `~/.codex` are compatibility fallbacks. Keep `CODEX_*` names when
@@ -38,6 +40,9 @@ Rust implementation lives under `code-rs`:
 - Treat `codex-rs` as a read-only mirror of `openai/codex:main`; edit Rust
   sources under `code-rs`, including imported Codex-based sources that become
   part of the Every Code product workspace.
+- When aligning with upstream, prefer moving `code-rs` closer to current Codex
+  CLI shapes and adding Every Code behavior as a small product-layer overlay.
+  Do not make `codex-rs` mirror Every Code or edit it directly.
 
 Completion/build step
 
@@ -184,27 +189,23 @@ The command execution flow in Code follows an event-driven pattern:
 
 This architecture separates concerns between execution logic (core), UI state management (chatwidget), and rendering (history_cell).
 
-### Auto Drive Escape Handling
+### Long-Running Goal Handling
 
-- All Auto Drive escape routing lives in `code-rs/tui/src/chatwidget.rs`. The
-  `ChatWidget::auto_should_handle_global_esc` helper decides whether the global
-  Esc handler in `app.rs` should defer to Auto Drive, and
-  `ChatWidget::handle_key_event` owns the actual stop / pause behaviour. When
-  you need to tweak Esc semantics, update those two locations together.
-- The approval pane must *never* swallow Esc. `code-rs/tui/src/bottom_pane/auto_coordinator_view.rs`
-  intentionally lets Esc (and the other approval shortcuts) bubble back to the
-  chat widget; keep this contract intact when editing the view layer.
-- Avoid adding additional Esc handlers elsewhere for Auto Drive flows. Doing
-  so breaks the modal-first ordering in `app.rs` and prevents users from
-  reliably stopping a run.
+- Standalone Auto Drive is retired. Do not restore `/auto`, `code exec --auto`,
+  Auto Drive settings/cards, `AUTO_AGENTS.md`, or `code-auto-drive-*` crates.
+- Preserve useful long-running-work behavior through current Codex goal,
+  review, guardian, session, and agent primitives in `code-rs`.
+- Approval panes and global Esc handling should remain modal-first and
+  interruption-friendly for current TUI surfaces; add focused TUI fixtures when
+  changing those semantics.
 
-### Auto Drive Crash Diagnostics
+### TUI Crash Diagnostics
 
-- `code-dev` in `/home/azureuser/.bashrc` now auto-enables local crash capture for dev runs. It sets `CODEX_TUI_RECORD_SESSION=1`, chooses a per-run `CODEX_TUI_SESSION_LOG_PATH` under `~/.code/debug_logs/code-dev/`, and forces `RUST_BACKTRACE=full` unless you already overrode it.
+- `code-dev` in `/home/azureuser/.bashrc` auto-enables local crash capture for dev runs. It sets `CODEX_TUI_RECORD_SESSION=1`, chooses a per-run `CODEX_TUI_SESSION_LOG_PATH` under `~/.code/debug_logs/code-dev/`, and forces `RUST_BACKTRACE=full` unless you already overrode it.
 - Existing terminal sessions do **not** pick up the updated `code-dev` alias automatically. In every already-open shell that you want to use for debugging, run `source ~/.bashrc` (or restart the shell with `exec bash`). In tmux, do this once per pane/window before launching `code-dev`.
-- On startup, `code-dev` prints the exact session log path. Keep that path after a crash; it now contains Auto Drive coordinator decisions, countdown ticks, token metrics, and structured panic records with backtraces.
-- TUI panics are logged in both places: the per-run session JSONL log and the regular `critical.log` under Code's log directory. Check both when debugging long-running Auto Drive crashes.
-- If you want telemetry to leave the machine as well, configure `[otel]` in `~/.code/config.toml`. The TUI and `code exec --auto ...` now attach the OTEL logger layer, so exported `code_otel` events and error-level crash logs are emitted when an exporter is configured.
+- On startup, `code-dev` prints the exact session log path. Keep that path after a crash; it contains TUI events, token metrics, and structured panic records with backtraces.
+- TUI panics are logged in both places: the per-run session JSONL log and the regular `critical.log` under Code's log directory. Check both when debugging long-running sessions.
+- If you want telemetry to leave the machine as well, configure `[otel]` in `~/.code/config.toml`.
 
 ## Writing New UI Regression Tests
 

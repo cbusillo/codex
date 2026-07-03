@@ -26,7 +26,8 @@ source "$HOME/.cargo/env"
 # Build everything (CLI, TUI, MCP servers). This is the same check CI runs.
 ./build-fast.sh
 
-# Install the PATH-resolved local binary and launch the TUI.
+# Preview PATH/release-bin wiring, then install the PATH-resolved local binary.
+just local-code-rebuild-preflight
 just local-code-rebuild
 code -- "explain this codebase to me"
 ```

@@ -228,6 +228,7 @@ impl GoalTurnAccountingSnapshot {
                 .reasoning_output_tokens
                 .saturating_sub(last.reasoning_output_tokens),
             total_tokens: current.total_tokens.saturating_sub(last.total_tokens),
+            cached_input_tokens_reported: current.cached_input_tokens_reported,
         };
         goal_token_delta_for_usage(&delta)
     }
@@ -1549,6 +1550,7 @@ mod tests {
             output_tokens: 80,
             reasoning_output_tokens: 20,
             total_tokens: 1_000,
+            ..Default::default()
         };
 
         assert_eq!(580, goal_token_delta_for_usage(&usage));

@@ -393,6 +393,7 @@ impl EventProcessorWithJsonOutput {
     pub fn thread_started_event(session_configured: &SessionConfiguredEvent) -> ThreadEvent {
         ThreadEvent::ThreadStarted(ThreadStartedEvent {
             thread_id: session_configured.thread_id.to_string(),
+            approvals_reviewer: session_configured.approvals_reviewer,
         })
     }
 

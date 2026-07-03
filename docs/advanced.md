@@ -9,7 +9,7 @@ Run Every Code headless in pipelines. Example GitHub Action step:
   run: |
     just local-code-rebuild
     export OPENAI_API_KEY="${{ secrets.OPENAI_KEY }}"
-    code exec --full-auto "update CHANGELOG for next release"
+    code exec --sandbox workspace-write "update CHANGELOG for next release"
 ```
 
 ### Resuming non-interactive sessions
@@ -60,10 +60,6 @@ When you enable the CLI `--debug` flag, request/response JSON is partitioned
 into helper-specific folders under `~/.code/debug_logs/`. Expect
 subdirectories such as:
 
-- `auto/coordinator`
-- `auto/observer/bootstrap`
-- `auto/observer/cadence`
-- `auto/observer/cross_check`
 - `guided_terminal/agent_install_flow`
 - `guided_terminal/upgrade_terminal_flow`
 - `tui/rate_limit_refresh`

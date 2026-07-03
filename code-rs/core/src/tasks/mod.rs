@@ -658,6 +658,7 @@ impl Session {
                 total_tokens: (total_token_usage.total_tokens
                     - token_usage_at_turn_start.total_tokens)
                     .max(0),
+                cached_input_tokens_reported: total_token_usage.cached_input_tokens_reported,
             };
             if records_turn_token_usage_on_span {
                 let current_span = Span::current();

@@ -51,7 +51,8 @@
       "verifyGitHubRelease": "gh release view v<version> --repo cbusillo/code",
       "upstreamCursors": "just local-upstream-cursors",
       "upstreamImport": "just local-upstream-import",
-      "localReleaseNotes": "just local-release-notes"
+      "localReleaseNotes": "just local-release-notes",
+      "execHarnessSmoke": "just harness-smoke"
     },
     "docsRequiredWhen": [
       "CLI behavior changes",

@@ -863,6 +863,117 @@ async fn image_generation_call_adds_history_cell() {
 }
 
 #[tokio::test]
+async fn dynamic_tool_call_collect_adds_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    handle_dynamic_tool_call(
+        &mut chat,
+        "call-code-bridge-collect",
+        None,
+        "code_bridge",
+        json!({"action":"collect"}),
+        vec![AppServerDynamicToolCallOutputContentItem::InputText {
+            text: json!({
+                "ok": true,
+                "message": "collected 3 Code Bridge event(s)",
+                "result": {
+                    "count": 3,
+                    "transcript": "[info] App mounted\n[warn] Slow render 120ms\n[error] TypeError: value is null"
+                }
+            })
+            .to_string(),
+        }],
+        true,
+    );
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected a single history cell");
+    let combined = lines_to_single_string(&cells[0]);
+    assert_chatwidget_snapshot!("dynamic_tool_call_collect_history_snapshot", combined);
+}
+
+#[tokio::test]
+async fn dynamic_tool_call_screenshot_adds_history_cell_with_image_marker() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    handle_dynamic_tool_call(
+        &mut chat,
+        "call-code-bridge-screenshot",
+        None,
+        "code_bridge",
+        json!({"action":"screenshot"}),
+        vec![
+            AppServerDynamicToolCallOutputContentItem::InputText {
+                text: json!({
+                    "ok": true,
+                    "message": "screenshot captured",
+                    "screenshot": {
+                        "mime": "image/png",
+                        "data_len": 12345
+                    }
+                })
+                .to_string(),
+            },
+            AppServerDynamicToolCallOutputContentItem::InputImage {
+                image_url: "data:image/png;base64,iVBORw0KGgo=".to_string(),
+            },
+        ],
+        true,
+    );
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected a single history cell");
+    let combined = lines_to_single_string(&cells[0]);
+    assert_chatwidget_snapshot!(
+        "dynamic_tool_call_screenshot_history_snapshot",
+        combined
+    );
+}
+
+#[tokio::test]
+async fn dynamic_tool_call_namespace_adds_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    handle_dynamic_tool_call(
+        &mut chat,
+        "call-plugin-status",
+        Some("plugin".to_string()),
+        "status",
+        json!({"verbose":true}),
+        vec![AppServerDynamicToolCallOutputContentItem::InputText {
+            text: "ready".to_string(),
+        }],
+        true,
+    );
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected a single history cell");
+    let combined = lines_to_single_string(&cells[0]);
+    assert_chatwidget_snapshot!("dynamic_tool_call_namespace_history_snapshot", combined);
+}
+
+#[tokio::test]
+async fn dynamic_tool_call_in_progress_adds_calling_history_cell() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    handle_dynamic_tool_call_with_status(
+        &mut chat,
+        "call-code-bridge-running",
+        None,
+        "code_bridge",
+        json!({"action":"collect"}),
+        AppServerDynamicToolCallStatus::InProgress,
+        Vec::new(),
+        None,
+    );
+
+    let cells = drain_insert_history(&mut rx);
+    assert_eq!(cells.len(), 1, "expected a single history cell");
+    let combined = lines_to_single_string(&cells[0]);
+    assert_chatwidget_snapshot!("dynamic_tool_call_in_progress_history_snapshot", combined);
+}
+
+#[tokio::test]
 async fn exec_history_extends_previous_when_consecutive() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
 

@@ -2889,6 +2889,7 @@ impl Session {
                 output_tokens: 0,
                 reasoning_output_tokens: 0,
                 total_tokens: estimated_total_tokens.max(0),
+                cached_input_tokens_reported: None,
             };
 
             if let Some(model_context_window) = turn_context.model_context_window() {

@@ -2,6 +2,7 @@ use crate::tools::code_mode::execute_spec::create_code_mode_tool;
 use crate::tools::handlers::ApplyPatchHandler;
 use crate::tools::handlers::CodeModeExecuteHandler;
 use crate::tools::handlers::CodeModeWaitHandler;
+use crate::tools::handlers::CodeBridgeHandler;
 use crate::tools::handlers::ContainerExecHandler;
 use crate::tools::handlers::CreateGoalHandler;
 use crate::tools::handlers::DynamicToolHandler;
@@ -271,6 +272,14 @@ pub fn build_tool_registry_builder(
         .any(|tool| tool == "test_sync_tool")
     {
         builder.register_handler(Arc::new(TestSyncHandler));
+    }
+
+    if config
+        .experimental_supported_tools
+        .iter()
+        .any(|tool| tool == "code_bridge")
+    {
+        builder.register_handler(Arc::new(CodeBridgeHandler));
     }
 
     if let Some(web_search_tool) = create_web_search_tool(WebSearchToolOptions {

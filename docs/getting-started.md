@@ -19,7 +19,7 @@ code "explain this codebase to me"
 ```
 
 ```shell
-code --full-auto "create the fanciest todo-list app"
+code --sandbox workspace-write "create the fanciest todo-list app"
 ```
 
 That's it - Every Code will scaffold a file, run it inside a sandbox, install any

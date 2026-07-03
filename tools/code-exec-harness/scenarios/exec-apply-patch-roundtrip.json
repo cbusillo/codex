@@ -1,0 +1,94 @@
+{
+    "name": "exec-apply-patch-roundtrip",
+    "model": "gpt-5.1-codex",
+    "sandbox": "workspace-write",
+    "files": {
+        "notes.txt": "before\n"
+    },
+    "prompt": "Use apply_patch to change notes.txt from before to after, then reply with exactly: patch done",
+    "responses_api": {
+        "responses": [
+            {
+                "response_id": "resp-patch-call",
+                "events": [
+                    {
+                        "type": "response.created",
+                        "payload": {
+                            "type": "response.created",
+                            "response": {
+                                "id": "resp-patch-call"
+                            }
+                        }
+                    },
+                    {
+                        "item": {
+                            "type": "function_call",
+                            "call_id": "call-apply-patch",
+                            "name": "shell_command",
+                            "arguments": "{\"command\":\"apply_patch <<'PATCH'\\n*** Begin Patch\\n*** Update File: notes.txt\\n@@\\n-before\\n+after\\n*** End Patch\\nPATCH\",\"login\":false,\"timeout_ms\":1000}"
+                        }
+                    }
+                ]
+            },
+            {
+                "response_id": "resp-patch-final",
+                "events": [
+                    {
+                        "item": {
+                            "type": "message",
+                            "role": "assistant",
+                            "id": "msg-patch-final",
+                            "content": [
+                                {
+                                    "type": "output_text",
+                                    "text": "patch done"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "expect": {
+        "returncode": 0,
+        "assistant_contains": [
+            "patch done"
+        ],
+        "responses_request_count": 2,
+        "workspace_files": [
+            {
+                "path": "notes.txt",
+                "exists": true,
+                "equals": "after\n"
+            }
+        ],
+        "workspace_git_status": [
+            {
+                "equals": " M notes.txt\n"
+            }
+        ],
+        "event_count_any": [
+            {
+                "item.file_change": 2,
+                "item.agent_message": 1,
+                "turn.completed": 1
+            }
+        ],
+        "function_call_outputs": [
+            {
+                "request": 1,
+                "call_id": "call-apply-patch",
+                "contains_all": [
+                    "Success"
+                ],
+                "contains_any": [
+                    "\"exit_code\":0",
+                    "Exit code: 0"
+                ]
+            }
+        ]
+    },
+    "max_seconds": 30,
+    "timeout_seconds": 90
+}

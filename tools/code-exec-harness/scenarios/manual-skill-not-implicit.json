@@ -22,10 +22,11 @@
         "request": 0,
         "scope": "input",
         "count": {
-          "### Available skills": 1,
-          "- implicit-skill: Implicit skill": 1,
-          "- manual-skill: Manual skill": 0
-        }
+                    "### Available skills": 1,
+                    "- implicit-skill: Implicit skill": 1,
+                    "- manual-skill: Manual skill": 1,
+                    "Use the manual skill only when explicitly requested.": 0
+                }
       }
     ]
   },

@@ -30,7 +30,7 @@ Yes, you can disable all approval prompts with `--ask-for-approval never`. This 
 | Safe read-only browsing            | `--sandbox read-only --ask-for-approval on-request`                                         | Code can read files and answer questions. Code requires approval to make edits, run commands, or access network.                                      |
 | Read-only non-interactive (CI)     | `--sandbox read-only --ask-for-approval never`                                              | Reads only; never escalates                                                                                                                           |
 | Let it edit the repo, ask if risky | `--sandbox workspace-write --ask-for-approval on-request`                                   | Code can read files, make edits, and run commands in the workspace. Code requires approval for actions outside the workspace or for network access.   |
-| Auto (preset)                      | `--full-auto` (equivalent to `--sandbox workspace-write` + `--ask-for-approval on-failure`) | Code can read files, make edits, and run commands in the workspace. Code requires approval when a sandboxed command fails or needs escalation.        |
+| Workspace edits                    | `--sandbox workspace-write --ask-for-approval on-failure`                                  | Code can read files, make edits, and run commands in the workspace. Code requires approval when a sandboxed command fails or needs escalation.        |
 | YOLO (not recommended)             | `--dangerously-bypass-approvals-and-sandbox` (alias: `--yolo`)                              | No sandbox; no prompts                                                                                                                                |
 
 > Note: In `workspace-write`, network is disabled by default unless enabled in config (`[sandbox_workspace_write].network_access = true`).
@@ -42,7 +42,7 @@ Yes, you can disable all approval prompts with `--ask-for-approval never`. This 
 approval_policy = "untrusted"
 sandbox_mode    = "read-only"
 
-# full-auto mode
+# workspace-write mode
 approval_policy = "on-request"
 sandbox_mode    = "workspace-write"
 
@@ -54,7 +54,7 @@ network_access = true
 You can also save presets as **profiles**:
 
 ```toml
-[profiles.full_auto]
+[profiles.workspace_write]
 approval_policy = "on-request"
 sandbox_mode    = "workspace-write"
 
@@ -69,14 +69,14 @@ To test to see what happens when a command is run under the sandbox provided by 
 
 ```
 # macOS
-code sandbox macos [--full-auto] [COMMAND]...
+code sandbox macos [COMMAND]...
 
 # Linux
-code sandbox linux [--full-auto] [COMMAND]...
+code sandbox linux [COMMAND]...
 
 # Legacy aliases
-code debug seatbelt [--full-auto] [COMMAND]...
-code debug landlock [--full-auto] [COMMAND]...
+code debug seatbelt [COMMAND]...
+code debug landlock [COMMAND]...
 ```
 
 ### Platform sandboxing details
