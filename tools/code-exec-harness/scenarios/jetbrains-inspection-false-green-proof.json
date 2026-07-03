@@ -1,0 +1,15 @@
+{
+  "name": "jetbrains-inspection-false-green-proof",
+  "prompt": "Run this exact helper command before answering: `python3 \"$CODE_HOME/skills/jetbrains-inspection-proof/scripts/jb-inspect.py\" inspect-closeout --repo \"$PWD/worktrees/feature-odoo\" --scope changed_files`. Then decide whether the worktree is ready. The helper may return a top-level verdict, but you must base your answer on the proof fields. Do not modify files.",
+  "files": {
+    "AGENTS.md": "# Harness Project\n\nWhen validating readiness, use the JetBrains inspection proof skill. GREEN requires exact requested worktree proof, expected profile proof, non-empty relevant scope proof, fresh session proof, complete capture proof, and expected inspection IDs. Contradictory GREEN/0 output is UNKNOWN, not clean.\n"
+  },
+  "skill_roots": ["../fixtures/skills/jetbrains-inspection-proof"],
+  "expect": {
+    "returncode": 0,
+    "command_contains": ["jetbrains-inspection-proof/scripts/jb-inspect.py", "inspect-closeout --repo"],
+    "assistant_contains": ["UNKNOWN", "OdooPyInspection"]
+  },
+  "max_seconds": 120,
+  "timeout_seconds": 180
+}
