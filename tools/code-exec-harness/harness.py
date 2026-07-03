@@ -678,6 +678,19 @@ def summarize(events: list[dict[str, Any]], paths: RunPaths, returncode: int, co
                 "stdout": msg.get("stdout"),
                 "stderr": msg.get("stderr"),
             })
+        elif msg_type == "custom_tool_call_end" and msg.get("tool_name") == "wait":
+            waited_call_id = ((msg.get("parameters") or {}).get("call_id"))
+            result_payload = msg.get("result") or {}
+            wait_result = result_payload.get("Ok") if "Ok" in result_payload else result_payload.get("Err")
+            completed = parse_wait_completed_command(wait_result)
+            if isinstance(waited_call_id, str) and completed is not None:
+                commands.append({
+                    "command": running_commands.pop(waited_call_id, None),
+                    "exit_code": completed.get("exit_code"),
+                    "status": "completed" if completed.get("exit_code") == 0 else "failed",
+                    "stdout": completed.get("stdout") or completed.get("output"),
+                    "stderr": completed.get("stderr"),
+                })
         elif event_type in {"error", "turn.failed"}:
             errors.append(event)
         item = event.get("item") or {}
@@ -713,6 +726,24 @@ def summarize(events: list[dict[str, Any]], paths: RunPaths, returncode: int, co
         "command": command,
         "run_dir": str(paths.run_dir),
     }
+
+
+def parse_wait_completed_command(wait_result: Any) -> dict[str, Any] | None:
+    if not isinstance(wait_result, str):
+        return None
+    try:
+        payload = json.loads(wait_result)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if "exit_code" not in payload and "metadata" in payload and isinstance(payload["metadata"], dict):
+        payload = payload | {"exit_code": payload["metadata"].get("exit_code")}
+    if "exit_code" not in payload and "output" in payload:
+        payload = payload | {"exit_code": 1}
+    if "exit_code" not in payload:
+        return None
+    return payload
 
 
 def session_id_from_summary(summary: dict[str, Any]) -> str:
