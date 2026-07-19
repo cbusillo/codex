@@ -621,7 +621,7 @@ pub(crate) async fn run_turn(
                             &turn_context,
                             EventMsg::Error(ErrorEvent {
                                 message,
-                                codex_error_info: None,
+                                codex_error_info: Some(CodexErrorInfo::Other),
                             }),
                         )
                         .await;

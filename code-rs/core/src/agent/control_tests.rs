@@ -1,6 +1,7 @@
 use super::*;
 use crate::CodexThread;
 use crate::StateDbHandle;
+use crate::StartThreadOptions;
 use crate::ThreadManager;
 use crate::agent::agent_status_from_event;
 use crate::config::AgentRoleConfig;
@@ -17,8 +18,10 @@ use codex_protocol::config_types::ModeKind;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::MessagePhase;
 use codex_protocol::models::ResponseItem;
+use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::InterAgentCommunication;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::SubAgentSource;
@@ -1405,6 +1408,145 @@ async fn multi_agent_v2_completion_queues_message_for_direct_parent() {
             /*trigger_turn*/ false,
         )
     ));
+}
+
+#[tokio::test]
+async fn multi_agent_v2_terminal_error_queues_message_for_direct_parent() {
+    for (case, codex_error_info) in [
+        (
+            "typed",
+            Some(CodexErrorInfo::ResponseTooManyFailedAttempts {
+                http_status_code: None,
+            }),
+        ),
+        ("untyped", None),
+    ] {
+        let harness = AgentControlHarness::new().await;
+        let (parent_thread_id, _parent_thread) = harness.start_thread().await;
+        let worker_path = AgentPath::root().join("worker").expect("worker path");
+        let mut child_config = harness.config.clone();
+        let _ = child_config.features.enable(Feature::MultiAgentV2);
+        let child = harness
+            .manager
+            .start_thread_with_options(StartThreadOptions {
+                config: child_config,
+                initial_history: InitialHistory::New,
+                session_source: Some(SessionSource::SubAgent(SubAgentSource::ThreadSpawn {
+                    parent_thread_id,
+                    depth: 1,
+                    agent_path: Some(worker_path.clone()),
+                    agent_nickname: None,
+                    agent_role: Some("explorer".to_string()),
+                })),
+                thread_source: None,
+                dynamic_tools: Vec::new(),
+                persist_extended_history: false,
+                metrics_service_name: None,
+                parent_trace: None,
+                environments: Vec::new(),
+            })
+            .await
+            .expect("child thread should start");
+        let turn = child.thread.codex.session.new_default_turn().await;
+        let error = format!("{case} stream disconnected before completion");
+        child
+            .thread
+            .codex
+            .session
+            .send_event(
+                turn.as_ref(),
+                EventMsg::Error(ErrorEvent {
+                    message: error.clone(),
+                    codex_error_info,
+                }),
+            )
+            .await;
+        child
+            .thread
+            .codex
+            .session
+            .send_event(
+                turn.as_ref(),
+                EventMsg::TurnComplete(TurnCompleteEvent {
+                    turn_id: turn.sub_id.clone(),
+                    last_agent_message: None,
+                    completed_at: None,
+                    duration_ms: None,
+                    time_to_first_token_ms: None,
+                }),
+            )
+            .await;
+
+        assert_eq!(
+            child.thread.agent_status().await,
+            AgentStatus::Errored(error.clone()),
+            "{case} terminal error should remain the final child status"
+        );
+
+        let expected_message = crate::session_prefix::format_subagent_notification_message(
+            worker_path.as_str(),
+            &AgentStatus::Errored(error),
+        );
+        let expected = (
+            parent_thread_id,
+            Op::InterAgentCommunication {
+                communication: InterAgentCommunication::new(
+                    worker_path,
+                    AgentPath::root(),
+                    Vec::new(),
+                    expected_message,
+                    /*trigger_turn*/ false,
+                ),
+            },
+        );
+
+        timeout(Duration::from_secs(5), async {
+            loop {
+                if harness
+                    .manager
+                    .captured_ops()
+                    .into_iter()
+                    .any(|entry| entry == expected)
+                {
+                    break;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("{case} terminal error should be queued for the direct parent"));
+
+        child
+            .thread
+            .codex
+            .session
+            .send_event(
+                turn.as_ref(),
+                EventMsg::TurnAborted(TurnAbortedEvent {
+                    turn_id: Some(turn.sub_id.clone()),
+                    reason: TurnAbortReason::Interrupted,
+                    completed_at: None,
+                    duration_ms: None,
+                }),
+            )
+            .await;
+
+        assert_eq!(
+            child.thread.agent_status().await,
+            AgentStatus::Errored(format!("{case} stream disconnected before completion")),
+            "{case} terminal error should survive a trailing abort"
+        );
+        assert_eq!(
+            harness
+                .manager
+                .captured_ops()
+                .into_iter()
+                .filter(|entry| entry == &expected)
+                .count(),
+            1,
+            "{case} terminal error should notify the direct parent exactly once"
+        );
+    }
 }
 
 #[tokio::test]

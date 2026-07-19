@@ -1517,6 +1517,15 @@ impl Session {
     /// Persist the event to rollout and send it to clients.
     pub(crate) async fn send_event(&self, turn_context: &TurnContext, msg: EventMsg) {
         let legacy_source = msg.clone();
+        if let EventMsg::Error(error) = &legacy_source
+            && error.affects_turn_status()
+        {
+            turn_context
+                .terminal_error
+                .lock()
+                .await
+                .replace(error.message.clone());
+        }
         self.services
             .rollout_thread_trace
             .record_codex_turn_event(&turn_context.sub_id, &legacy_source);
@@ -1527,9 +1536,27 @@ impl Session {
             id: turn_context.sub_id.clone(),
             msg,
         };
-        self.send_event_raw(event).await;
-        self.maybe_notify_parent_of_terminal_turn(turn_context, &legacy_source)
+        let status_override = if matches!(
+            legacy_source,
+            EventMsg::TurnComplete(_) | EventMsg::TurnAborted(_)
+        ) {
+            turn_context
+                .terminal_error
+                .lock()
+                .await
+                .clone()
+                .map(AgentStatus::Errored)
+        } else {
+            None
+        };
+        self.send_event_raw_with_status(event, status_override.clone())
             .await;
+        self.maybe_notify_parent_of_terminal_turn(
+            turn_context,
+            &legacy_source,
+            status_override,
+        )
+        .await;
         self.maybe_mirror_event_text_to_realtime(&legacy_source)
             .await;
         self.maybe_clear_realtime_handoff_for_event(&legacy_source)
@@ -1550,6 +1577,7 @@ impl Session {
         &self,
         turn_context: &TurnContext,
         msg: &EventMsg,
+        status_override: Option<AgentStatus>,
     ) {
         if !self.enabled(Feature::MultiAgentV2) {
             return;
@@ -1568,20 +1596,42 @@ impl Session {
             return;
         };
 
-        let Some(status) = agent_status_from_event(msg) else {
-            return;
+        let uses_terminal_error = status_override.is_some();
+        let status = match status_override {
+            Some(status) => status,
+            None => {
+                let Some(status) = agent_status_from_event(msg) else {
+                    return;
+                };
+                status
+            }
         };
         if !is_final(&status) {
             return;
         }
 
-        self.forward_child_completion_to_parent(
-            turn_context,
-            *parent_thread_id,
-            child_agent_path,
-            status,
-        )
-        .await;
+        if uses_terminal_error {
+            turn_context
+                .terminal_error_parent_notification
+                .get_or_init(|| async {
+                    self.forward_child_completion_to_parent(
+                        turn_context,
+                        *parent_thread_id,
+                        child_agent_path,
+                        status,
+                    )
+                    .await;
+                })
+                .await;
+        } else {
+            self.forward_child_completion_to_parent(
+                turn_context,
+                *parent_thread_id,
+                child_agent_path,
+                status,
+            )
+            .await;
+        }
     }
 
     /// Sends the standard completion envelope from a spawned MultiAgentV2 child to its parent.
@@ -1664,18 +1714,37 @@ impl Session {
     }
 
     pub(crate) async fn send_event_raw(&self, event: Event) {
+        self.send_event_raw_with_status(event, /*status_override*/ None)
+            .await;
+    }
+
+    async fn send_event_raw_with_status(
+        &self,
+        event: Event,
+        status_override: Option<AgentStatus>,
+    ) {
         // Persist the event into rollout storage (the store filters as needed).
         let rollout_items = vec![RolloutItem::EventMsg(event.msg.clone())];
         self.persist_rollout_items(&rollout_items).await;
         self.services
             .rollout_thread_trace
             .record_protocol_event(&event.msg);
-        self.deliver_event_raw(event).await;
+        self.deliver_event_raw_with_status(event, status_override)
+            .await;
     }
 
     async fn deliver_event_raw(&self, event: Event) {
+        self.deliver_event_raw_with_status(event, /*status_override*/ None)
+            .await;
+    }
+
+    async fn deliver_event_raw_with_status(
+        &self,
+        event: Event,
+        status_override: Option<AgentStatus>,
+    ) {
         // Record the last known agent status.
-        if let Some(status) = agent_status_from_event(&event.msg) {
+        if let Some(status) = status_override.or_else(|| agent_status_from_event(&event.msg)) {
             self.agent_status.send_replace(status);
         }
         if let Err(e) = self.tx_event.send(event).await {

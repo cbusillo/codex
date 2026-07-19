@@ -5,7 +5,7 @@
 
 ## [Unreleased]
 
-- (none)
+- Agents: preserve terminal subagent stream failures through trailing turn completion so child status and parent notifications report the real error instead of an empty success.
 
 ## [0.6.116] - 2026-06-04
 

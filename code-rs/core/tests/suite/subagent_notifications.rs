@@ -2,6 +2,8 @@ use anyhow::Result;
 use codex_core::ThreadConfigSnapshot;
 use codex_core::config::AgentRoleConfig;
 use codex_features::Feature;
+use codex_protocol::protocol::AgentStatus;
+use codex_protocol::protocol::EventMsg;
 use codex_protocol::ThreadId;
 use codex_protocol::openai_models::ReasoningEffort;
 use core_test_support::responses::ResponsesRequest;
@@ -24,6 +26,7 @@ use std::path::Path;
 use std::time::Duration;
 use tokio::time::Instant;
 use tokio::time::sleep;
+use tokio::time::timeout;
 use wiremock::MockServer;
 
 const SPAWN_CALL_ID: &str = "spawn-call-1";
@@ -37,6 +40,12 @@ const REQUESTED_MODEL: &str = "gpt-5.4";
 const REQUESTED_REASONING_EFFORT: ReasoningEffort = ReasoningEffort::Low;
 const ROLE_MODEL: &str = "gpt-5.4";
 const ROLE_REASONING_EFFORT: ReasoningEffort = ReasoningEffort::High;
+
+#[derive(Clone, Copy)]
+enum ChildCompletionScenario {
+    Completed,
+    TerminalError,
+}
 
 fn body_contains(req: &wiremock::Request, text: &str) -> bool {
     let is_zstd = req
@@ -154,6 +163,7 @@ async fn setup_turn_one_with_spawned_child(
         }),
         child_response_delay,
         /*wait_for_parent_notification*/ true,
+        ChildCompletionScenario::Completed,
         |builder| builder,
     )
     .await
@@ -164,6 +174,7 @@ async fn setup_turn_one_with_custom_spawned_child(
     spawn_args: serde_json::Value,
     child_response_delay: Option<Duration>,
     wait_for_parent_notification: bool,
+    child_completion_scenario: ChildCompletionScenario,
     configure_test: impl FnOnce(
         core_test_support::test_codex::TestCodexBuilder,
     ) -> core_test_support::test_codex::TestCodexBuilder,
@@ -181,11 +192,17 @@ async fn setup_turn_one_with_custom_spawned_child(
     )
     .await;
 
-    let child_sse = sse(vec![
-        ev_response_created("resp-child-1"),
-        ev_assistant_message("msg-child-1", "child done"),
-        ev_completed("resp-child-1"),
-    ]);
+    let child_events = match child_completion_scenario {
+        ChildCompletionScenario::Completed => vec![
+            ev_response_created("resp-child-1"),
+            ev_assistant_message("msg-child-1", "child done"),
+            ev_completed("resp-child-1"),
+        ],
+        ChildCompletionScenario::TerminalError => {
+            vec![ev_response_created("resp-child-1")]
+        }
+    };
+    let child_sse = sse(child_events);
     let child_request_log = if let Some(delay) = child_response_delay {
         mount_response_once_match(
             server,
@@ -267,6 +284,7 @@ async fn spawn_child_and_capture_snapshot(
         spawn_args,
         /*child_response_delay*/ None,
         /*wait_for_parent_notification*/ false,
+        ChildCompletionScenario::Completed,
         configure_test,
     )
     .await?;
@@ -301,6 +319,53 @@ async fn subagent_notification_is_included_without_wait() -> Result<()> {
 
     let turn2_requests = wait_for_requests(&turn2).await?;
     assert!(turn2_requests.iter().any(has_subagent_notification));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn multi_agent_v2_terminal_stream_error_preserves_errored_status() -> Result<()> {
+    skip_if_no_network!(Ok(()));
+
+    let server = start_mock_server().await;
+    let (test, spawned_id) = setup_turn_one_with_custom_spawned_child(
+        &server,
+        json!({
+            "message": CHILD_PROMPT,
+            "task_name": "worker",
+        }),
+        /*child_response_delay*/ None,
+        /*wait_for_parent_notification*/ false,
+        ChildCompletionScenario::TerminalError,
+        |builder| {
+            builder.with_config(|config| {
+                config
+                    .features
+                    .enable(Feature::MultiAgentV2)
+                    .expect("test config should allow feature update");
+                config.model_provider.request_max_retries = Some(0);
+                config.model_provider.stream_max_retries = Some(0);
+                config.model_provider.supports_websockets = false;
+            })
+        },
+    )
+    .await?;
+
+    let child_thread_id = ThreadId::from_string(&spawned_id)?;
+    let child_thread = test.thread_manager.get_thread(child_thread_id).await?;
+    loop {
+        let event = timeout(Duration::from_secs(6), child_thread.next_event()).await??;
+        if matches!(event.msg, EventMsg::TurnComplete(_)) {
+            break;
+        }
+    }
+
+    let expected_error =
+        "stream disconnected before completion: stream closed before response.completed";
+    assert_eq!(
+        child_thread.agent_status().await,
+        AgentStatus::Errored(expected_error.to_string())
+    );
 
     Ok(())
 }
