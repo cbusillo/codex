@@ -3,6 +3,7 @@ use crate::tools::handlers::apply_patch_spec::create_apply_patch_freeform_tool;
 use crate::tools::handlers::goal_spec::create_create_goal_tool;
 use crate::tools::handlers::goal_spec::create_get_goal_tool;
 use crate::tools::handlers::goal_spec::create_update_goal_tool;
+use crate::tools::handlers::gh_run_wait_spec::create_gh_run_wait_tool;
 use crate::tools::handlers::multi_agents_spec::WaitAgentTimeoutOptions;
 use crate::tools::handlers::multi_agents_spec::create_close_agent_tool_v1;
 use crate::tools::handlers::multi_agents_spec::create_close_agent_tool_v2;
@@ -117,6 +118,7 @@ fn test_full_toolset_specs_for_gpt5_codex_unified_exec_web_search() {
         }),
         create_write_stdin_tool(),
         create_update_plan_tool(),
+        create_gh_run_wait_tool(),
         request_user_input_tool_spec(&request_user_input_available_modes(&features)),
         create_apply_patch_freeform_tool(),
         ToolSpec::WebSearch {
