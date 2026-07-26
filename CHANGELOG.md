@@ -5,7 +5,7 @@
 
 ## [Unreleased]
 
-- (none)
+- Core/GH: make `gh_run_wait` fail fast with exact-run protected-environment diagnostics, never auto-approve deployments, and enforce bounded polling timeouts.
 
 ## [0.6.116] - 2026-06-04
 

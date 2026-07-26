@@ -235,6 +235,8 @@ This architecture separates concerns between execution logic (core), UI state ma
   release was requested, verify the tag explicitly with
   `gh release view v<version> --repo cbusillo/code`.
 - If you already know the run ID (e.g., from webhook output), run `scripts/wait-for-gh-run.sh --run <run-id>`.
-- Adjust the poll cadence via `--interval <seconds>` (defaults to 8). The script exits 0 on success and 1 on failure, so it can gate local automation.
+- Adjust the poll cadence via `--interval <seconds>` (defaults to 8). The script exits 0 on success and nonzero on failure, so it can gate local automation.
+- The wait is bounded by `--timeout <seconds>` (defaults to 1800 and is capped at 7200). Timeout exits 124.
+- If GitHub reports `status=waiting`, the script reads pending deployments for the exact run, prints protected-environment and current-identity approval diagnostics, and exits 2. It never approves a deployment; use the exact-run workflow babysitter with separate automation-dispatch and human-review identities.
 - Pass `--failure-logs` to automatically dump logs for any job that does not finish successfully.
 - Dependencies: GitHub CLI (`gh`) and `jq` must be available in `PATH`.

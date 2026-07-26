@@ -9,6 +9,7 @@ use crate::tools::handlers::DynamicToolHandler;
 use crate::tools::handlers::ExecCommandHandler;
 use crate::tools::handlers::ExecCommandHandlerOptions;
 use crate::tools::handlers::GetGoalHandler;
+use crate::tools::handlers::GhRunWaitHandler;
 use crate::tools::handlers::ListMcpResourceTemplatesHandler;
 use crate::tools::handlers::ListMcpResourcesHandler;
 use crate::tools::handlers::LocalShellHandler;
@@ -196,6 +197,7 @@ pub fn build_tool_registry_builder(
     }
 
     builder.register_handler(Arc::new(PlanHandler));
+    builder.register_handler(Arc::new(GhRunWaitHandler));
     if config.goal_tools {
         builder.register_handler(Arc::new(GetGoalHandler));
         builder.register_handler(Arc::new(CreateGoalHandler));

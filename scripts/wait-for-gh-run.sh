@@ -16,14 +16,19 @@ Usage: wait-for-gh-run.sh [OPTIONS]
 
 Options:
   -r, --run ID           Run ID to monitor.
+  -R, --repo OWNER/REPO  Repository to monitor (default: repository at the current directory).
   -w, --workflow NAME    Workflow name or filename to pick the latest run.
   -b, --branch BRANCH    Branch to filter when selecting a run (default: current branch).
+  -s, --head-sha SHA     Commit SHA to match when selecting the latest run.
   -i, --interval SECONDS Polling interval in seconds (default: 8).
+  -t, --timeout SECONDS  Overall timeout in seconds (default: 1800; maximum: 7200).
   -L, --failure-logs     Print logs for any job that does not finish successfully.
   -h, --help             Show this help message.
 
 If neither --run nor --workflow is provided, the latest run on the current
-branch is selected automatically.
+branch is selected automatically. A protected-environment wait exits 2 after
+printing pending-deployment diagnostics. A timeout exits 124. This command
+never approves a deployment.
 EOF
 }
 
@@ -35,9 +40,13 @@ require_binary() {
 }
 
 RUN_ID=""
+REPO=""
 WORKFLOW=""
 BRANCH=""
+HEAD_SHA=""
 INTERVAL="8"
+TIMEOUT="1800"
+MAX_TIMEOUT=7200
 PRINT_FAILURE_LOGS=false
 AUTO_SELECTED_RUN=false
 
@@ -45,6 +54,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -r|--run)
       RUN_ID="${2:-}"
+      shift 2
+      ;;
+    -R|--repo)
+      REPO="${2:-}"
       shift 2
       ;;
     -w|--workflow)
@@ -57,6 +70,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     -i|--interval)
       INTERVAL="${2:-}"
+      shift 2
+      ;;
+    -s|--head-sha)
+      HEAD_SHA="${2:-}"
+      shift 2
+      ;;
+    -t|--timeout)
+      TIMEOUT="${2:-}"
       shift 2
       ;;
     -L|--failure-logs)
@@ -78,6 +99,125 @@ done
 require_binary gh
 require_binary jq
 
+if [[ ! "$INTERVAL" =~ ^[1-9][0-9]*$ ]]; then
+  echo "error: --interval must be a positive integer" >&2
+  exit 1
+fi
+if [[ ! "$TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "error: --timeout must be a positive integer" >&2
+  exit 1
+fi
+
+INTERVAL=$((10#$INTERVAL))
+TIMEOUT=$((10#$TIMEOUT))
+
+if ((TIMEOUT > MAX_TIMEOUT)); then
+  echo "error: --timeout must be at most $MAX_TIMEOUT seconds" >&2
+  exit 1
+fi
+if ((INTERVAL > TIMEOUT)); then
+  echo "error: --interval must not exceed --timeout" >&2
+  exit 1
+fi
+if [[ -n "$REPO" && ! "$REPO" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
+  echo "error: --repo must use OWNER/REPO format" >&2
+  exit 1
+fi
+
+last_run_url=""
+wait_started_seconds=$SECONDS
+
+exit_on_timeout() {
+  local elapsed=$((SECONDS - wait_started_seconds))
+  echo "Timed out after $(format_duration "$elapsed") waiting for GitHub Actions run ${RUN_ID:-selection} (limit: $(format_duration "$TIMEOUT"))." >&2
+  [[ -n "$last_run_url" ]] && echo "  $last_run_url" >&2
+  echo "Retry gh_run_wait for the same exact run or use the exact-run babysitter for longer monitoring." >&2
+  exit 124
+}
+
+check_timeout() {
+  if ((SECONDS - wait_started_seconds >= TIMEOUT)); then
+    exit_on_timeout
+  fi
+}
+
+sleep_until_next_poll() {
+  local elapsed=$((SECONDS - wait_started_seconds))
+  local remaining=$((TIMEOUT - elapsed))
+  local sleep_seconds=$INTERVAL
+  if ((remaining <= 0)); then
+    exit_on_timeout
+  fi
+  if ((sleep_seconds > remaining)); then
+    sleep_seconds=$remaining
+  fi
+  sleep "$sleep_seconds"
+}
+
+GH_CAPTURED_OUTPUT=""
+GH_CAPTURED_ERROR=""
+ACTIVE_COMMAND_PID=""
+
+stop_active_command() {
+  local command_pid="${ACTIVE_COMMAND_PID:-}"
+  if [[ -z "$command_pid" ]]; then
+    return
+  fi
+  kill -TERM -- "-$command_pid" 2>/dev/null || kill "$command_pid" 2>/dev/null || true
+  sleep 0.1
+  kill -KILL -- "-$command_pid" 2>/dev/null || kill -9 "$command_pid" 2>/dev/null || true
+  wait "$command_pid" 2>/dev/null || true
+  ACTIVE_COMMAND_PID=""
+}
+
+handle_interrupt() {
+  local exit_status="$1"
+  stop_active_command
+  exit "$exit_status"
+}
+
+trap 'handle_interrupt 130' INT
+trap 'handle_interrupt 143' TERM HUP
+trap stop_active_command EXIT
+
+run_gh_capture() {
+  check_timeout
+  local stdout_file
+  local stderr_file
+  local command=(gh)
+  local command_pid
+  local command_status
+  stdout_file=$(mktemp "${TMPDIR:-/tmp}/gh-run-wait.stdout.XXXXXX")
+  stderr_file=$(mktemp "${TMPDIR:-/tmp}/gh-run-wait.stderr.XXXXXX")
+  if [[ -n "$REPO" ]]; then
+    command+=(-R "$REPO")
+  fi
+  command+=("$@")
+  set -m
+  "${command[@]}" >"$stdout_file" 2>"$stderr_file" &
+  command_pid=$!
+  ACTIVE_COMMAND_PID=$command_pid
+  set +m
+  while kill -0 "$command_pid" 2>/dev/null; do
+    if ((SECONDS - wait_started_seconds >= TIMEOUT)); then
+      stop_active_command
+      rm -f "$stdout_file" "$stderr_file"
+      exit_on_timeout
+    fi
+    sleep 0.1
+  done
+  if wait "$command_pid"; then
+    command_status=0
+  else
+    command_status=$?
+  fi
+  ACTIVE_COMMAND_PID=""
+  GH_CAPTURED_OUTPUT=$(cat "$stdout_file")
+  GH_CAPTURED_ERROR=$(cat "$stderr_file")
+  rm -f "$stdout_file" "$stderr_file"
+  return "$command_status"
+}
+
 default_branch() {
   local branch=""
   if command -v git >/dev/null 2>&1; then
@@ -96,12 +236,6 @@ default_branch() {
       fi
     fi
 
-    if branch=$(git remote show origin 2>/dev/null | awk '/HEAD branch/ {print $NF}'); then
-      if [[ -n "$branch" ]]; then
-        echo "$branch"
-        return 0
-      fi
-    fi
   fi
 
   echo "main"
@@ -111,14 +245,34 @@ select_latest_run() {
   local workflow="$1"
   local branch="$2"
   local json
-  if ! json=$(gh run list --workflow "$workflow" --branch "$branch" --limit 1 --json databaseId,status,conclusion,displayTitle,workflowName,headBranch 2>/dev/null); then
+  local run_id
+  local args=(run list --workflow "$workflow" --branch "$branch" --limit 1 --json databaseId,status,conclusion,displayTitle,workflowName,headBranch,headSha)
+  if [[ -n "$HEAD_SHA" ]]; then
+    args+=(--commit "$HEAD_SHA")
+  fi
+  if ! run_gh_capture "${args[@]}"; then
     echo "error: failed to list runs for workflow '$workflow'" >&2
     exit 1
   fi
+  json=$GH_CAPTURED_OUTPUT
 
   if [[ $(jq 'length' <<<"$json") -eq 0 ]]; then
     echo "error: no runs found for workflow '$workflow' on branch '$branch'" >&2
     exit 1
+  fi
+
+  if [[ -n "$HEAD_SHA" ]]; then
+    run_id=$(jq -r --arg head_sha "$HEAD_SHA" '
+      .[0]
+      | select(((.headSha // "") | ascii_downcase) == ($head_sha | ascii_downcase))
+      | .databaseId // empty
+    ' <<<"$json")
+    if [[ -z "$run_id" ]]; then
+      echo "error: no runs found for workflow '$workflow' on branch '$branch' at commit '$HEAD_SHA'" >&2
+      exit 1
+    fi
+    printf '%s\n' "$run_id"
+    return
   fi
 
   jq -r '.[0].databaseId' <<<"$json"
@@ -127,17 +281,36 @@ select_latest_run() {
 select_latest_run_any() {
   local branch="$1"
   local json
-  if ! json=$(gh run list --branch "$branch" --limit 1 --json databaseId,workflowName,displayTitle,headBranch 2>/dev/null); then
+  local run_id
+  local args=(run list --branch "$branch" --limit 1 --json databaseId,workflowName,displayTitle,headBranch,headSha)
+  if [[ -n "$HEAD_SHA" ]]; then
+    args+=(--commit "$HEAD_SHA")
+  fi
+  if ! run_gh_capture "${args[@]}"; then
     echo "error: failed to list runs on branch '$branch'" >&2
     exit 1
   fi
+  json=$GH_CAPTURED_OUTPUT
 
   if [[ $(jq 'length' <<<"$json") -eq 0 ]]; then
     echo "error: no runs found on branch '$branch'" >&2
     exit 1
   fi
 
-  WORKFLOW=$(jq -r '.[0].workflowName // ""' <<<"$json")
+  if [[ -n "$HEAD_SHA" ]]; then
+    run_id=$(jq -r --arg head_sha "$HEAD_SHA" '
+      .[0]
+      | select(((.headSha // "") | ascii_downcase) == ($head_sha | ascii_downcase))
+      | .databaseId // empty
+    ' <<<"$json")
+    if [[ -z "$run_id" ]]; then
+      echo "error: no runs found on branch '$branch' at commit '$HEAD_SHA'" >&2
+      exit 1
+    fi
+    printf '%s\n' "$run_id"
+    return
+  fi
+
   jq -r '.[0].databaseId' <<<"$json"
 }
 
@@ -155,6 +328,61 @@ format_duration() {
   fi
 }
 
+resolve_repo_for_api() {
+  RESOLVED_REPO=""
+  if [[ -n "$REPO" ]]; then
+    RESOLVED_REPO=$REPO
+    return 0
+  fi
+  if ! run_gh_capture repo view --json nameWithOwner --jq .nameWithOwner; then
+    return 1
+  fi
+  RESOLVED_REPO=$GH_CAPTURED_OUTPUT
+  [[ -n "$RESOLVED_REPO" ]]
+}
+
+diagnose_waiting_run() {
+  local run_url="$1"
+  local repo=""
+  local pending_json=""
+  local pending_count="0"
+  local pending_read=false
+
+  echo "Run $RUN_ID requires attention: GitHub reports status 'waiting'." >&2
+  [[ -n "$run_url" ]] && echo "  $run_url" >&2
+
+  if ! resolve_repo_for_api; then
+    echo "Unable to resolve the repository, so pending deployments could not be inspected." >&2
+  else
+    repo=$RESOLVED_REPO
+  fi
+  if [[ -n "$repo" ]] && ! run_gh_capture api "repos/$repo/actions/runs/$RUN_ID/pending_deployments"; then
+    echo "Unable to read pending deployments for exact run $RUN_ID in $repo." >&2
+  elif [[ -n "$repo" ]]; then
+    pending_json=$GH_CAPTURED_OUTPUT
+    pending_read=true
+  fi
+  if [[ "$pending_read" == true ]] && ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"$pending_json"; then
+    echo "GitHub returned an unexpected pending-deployments response for exact run $RUN_ID." >&2
+  elif [[ "$pending_read" == true ]]; then
+    pending_count=$(jq 'length' <<<"$pending_json")
+    if ((pending_count > 0)); then
+      echo "Pending protected environment deployment(s):" >&2
+      jq -r '
+        .[]
+        | ((.environment.name // "(unnamed environment)") | tostring | gsub("[\\r\\n\\t]"; " ")) as $name
+        | .current_user_can_approve as $can_approve
+        | "  - \($name): current GitHub CLI identity can approve: \(if $can_approve == true then "yes" elif $can_approve == false then "no" else "unknown" end)"
+      ' <<<"$pending_json" >&2
+    else
+      echo "GitHub reported no pending deployments; the wait may be a concurrency, queue, or custom protection-rule gate." >&2
+    fi
+  fi
+
+  echo "gh_run_wait does not approve protected environments." >&2
+  echo "Recommendation: use the exact-run babysitter for run $RUN_ID with separate automation-dispatch and human-review identities." >&2
+}
+
 if [[ -z "$BRANCH" ]]; then
   BRANCH=$(default_branch)
 fi
@@ -169,12 +397,12 @@ if [[ -z "$RUN_ID" ]]; then
   fi
 fi
 
-if [[ -z "$RUN_ID" ]]; then
-  echo "error: unable to determine run ID" >&2
+if [[ ! "$RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+  echo "error: unable to determine a valid numeric run ID" >&2
   exit 1
 fi
 
-echo "Waiting for GitHub Actions run $RUN_ID..." >&2
+echo "Waiting for GitHub Actions run $RUN_ID (timeout: $(format_duration "$TIMEOUT"))..." >&2
 if [[ "$AUTO_SELECTED_RUN" == true ]]; then
   if [[ -z "$WORKFLOW" ]]; then
     echo "Auto-selected latest run on branch '$BRANCH'." >&2
@@ -190,12 +418,14 @@ last_jobs_snapshot=""
 last_progress_snapshot=""
 
 while true; do
+  check_timeout
   json=""
-  if ! json=$(gh run view "$RUN_ID" --json status,conclusion,displayTitle,workflowName,headBranch,url,startedAt,updatedAt,jobs 2>/dev/null); then
+  if ! run_gh_capture run view "$RUN_ID" --json status,conclusion,displayTitle,workflowName,headBranch,url,startedAt,updatedAt,jobs; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') failed to fetch run info; retrying in $INTERVAL s" >&2
-    sleep "$INTERVAL"
+    sleep_until_next_poll
     continue
   fi
+  json=$GH_CAPTURED_OUTPUT
 
   status=$(jq -r '.status' <<<"$json")
   conclusion=$(jq -r '.conclusion // ""' <<<"$json")
@@ -203,11 +433,19 @@ while true; do
   display_title=$(jq -r '.displayTitle // "(no title)"' <<<"$json")
   branch_name=$(jq -r '.headBranch // "(unknown branch)"' <<<"$json")
   run_url=$(jq -r '.url // ""' <<<"$json")
+  if [[ -n "$run_url" ]]; then
+    last_run_url="$run_url"
+  fi
 
   if [[ "$status" != "$last_status" ]]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') [$workflow_name] $display_title on branch '$branch_name' -> status: $status${conclusion:+, conclusion: $conclusion}" >&2
     [[ -n "$run_url" ]] && echo "  $run_url" >&2
     last_status="$status"
+  fi
+
+  if [[ "$status" == "waiting" ]]; then
+    diagnose_waiting_run "$run_url"
+    exit 2
   fi
 
   jobs_snapshot=$(jq -r '.jobs[]? | "\(.name // "(no name)")|\(.status)//\(.conclusion // "")"' <<<"$json" | sort)
@@ -251,7 +489,9 @@ while true; do
           job_conclusion=$(jq -r '.conclusion // "unknown"' <<<"$job_json")
           echo "--- Logs for job: $job_name (ID $job_id, conclusion: $job_conclusion) ---" >&2
           if [[ -n "$job_id" ]]; then
-            if ! gh run view "$RUN_ID" --log --job "$job_id" 2>&1; then
+            if run_gh_capture run view "$RUN_ID" --log --job "$job_id"; then
+              printf '%s\n' "$GH_CAPTURED_OUTPUT"
+            else
               echo "(failed to fetch logs for job $job_id)" >&2
             fi
           else
@@ -289,7 +529,9 @@ while true; do
           | while IFS=$'\t' read -r job_id job_name; do
               [[ -z "$job_id" ]] && continue
               echo "--- Logs for job: $job_name (ID $job_id) ---" >&2
-              if ! gh run view "$RUN_ID" --log --job "$job_id" 2>&1; then
+              if run_gh_capture run view "$RUN_ID" --log --job "$job_id"; then
+                printf '%s\n' "$GH_CAPTURED_OUTPUT"
+              else
                 echo "(failed to fetch logs for job $job_id)" >&2
               fi
               echo "--- End logs for job: $job_name ---" >&2
@@ -304,5 +546,5 @@ while true; do
     fi
   fi
 
-  sleep "$INTERVAL"
+  sleep_until_next_poll
 done
