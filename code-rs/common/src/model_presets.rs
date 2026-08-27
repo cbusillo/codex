@@ -50,6 +50,119 @@ const ALL_TEXT_VERBOSITY: &[TextVerbosityConfig] = &[
 static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
     vec![
         ModelPreset {
+            id: "gpt-5.6-sol".to_string(),
+            model: "gpt-5.6-sol".to_string(),
+            display_name: "GPT-5.6 Sol".to_string(),
+            description: "Flagship GPT-5.6 model for high-capability coding, research, and real-world work."
+                .to_string(),
+            default_reasoning_effort: ReasoningEffort::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Low,
+                    description: "Fast responses with lighter reasoning".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Medium,
+                    description: "Balances speed and reasoning depth for everyday tasks".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::High,
+                    description: "Greater reasoning depth for complex problems".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::XHigh,
+                    description: "Extra high reasoning depth for complex problems".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Max,
+                    description: "Maximum reasoning depth for the hardest problems".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Ultra,
+                    description: "Maximum reasoning with automatic task delegation".to_string(),
+                },
+            ],
+            supported_text_verbosity: ALL_TEXT_VERBOSITY,
+            is_default: true,
+            upgrade: None,
+            pro_only: false,
+            show_in_picker: true,
+        },
+        ModelPreset {
+            id: "gpt-5.6-terra".to_string(),
+            model: "gpt-5.6-terra".to_string(),
+            display_name: "GPT-5.6 Terra".to_string(),
+            description: "Strong GPT-5.6 model for capable coding work at a lower price point."
+                .to_string(),
+            default_reasoning_effort: ReasoningEffort::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Low,
+                    description: "Fast responses with lighter reasoning".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Medium,
+                    description: "Balances speed and reasoning depth for everyday tasks".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::High,
+                    description: "Greater reasoning depth for complex problems".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::XHigh,
+                    description: "Extra high reasoning depth for complex problems".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Max,
+                    description: "Maximum reasoning depth for the hardest problems".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Ultra,
+                    description: "Maximum reasoning with automatic task delegation".to_string(),
+                },
+            ],
+            supported_text_verbosity: ALL_TEXT_VERBOSITY,
+            is_default: false,
+            upgrade: None,
+            pro_only: false,
+            show_in_picker: true,
+        },
+        ModelPreset {
+            id: "gpt-5.6-luna".to_string(),
+            model: "gpt-5.6-luna".to_string(),
+            display_name: "GPT-5.6 Luna".to_string(),
+            description: "Efficient GPT-5.6 model for high-volume coding and quick iteration."
+                .to_string(),
+            default_reasoning_effort: ReasoningEffort::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Low,
+                    description: "Fast responses with lighter reasoning".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Medium,
+                    description: "Balances speed and reasoning depth for everyday tasks".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::High,
+                    description: "Greater reasoning depth for complex problems".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::XHigh,
+                    description: "Extra high reasoning depth for complex problems".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffort::Max,
+                    description: "Maximum reasoning depth for the hardest problems".to_string(),
+                },
+            ],
+            supported_text_verbosity: ALL_TEXT_VERBOSITY,
+            is_default: false,
+            upgrade: None,
+            pro_only: false,
+            show_in_picker: true,
+        },
+        ModelPreset {
             id: "gpt-5.5".to_string(),
             model: "gpt-5.5".to_string(),
             display_name: "GPT-5.5".to_string(),
@@ -75,7 +188,7 @@ static PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
                 },
             ],
             supported_text_verbosity: ALL_TEXT_VERBOSITY,
-            is_default: true,
+            is_default: false,
             upgrade: None,
             pro_only: false,
             show_in_picker: true,
@@ -557,6 +670,8 @@ fn reasoning_effort_rank(effort: ReasoningEffort) -> u8 {
         ReasoningEffort::Medium => 2,
         ReasoningEffort::High => 3,
         ReasoningEffort::XHigh => 4,
+        ReasoningEffort::Max => 5,
+        ReasoningEffort::Ultra => 6,
     }
 }
 
@@ -638,6 +753,48 @@ mod tests {
     fn gpt_5_5_available_for_chatgpt_auth() {
         let presets = builtin_model_presets(Some(AuthMode::Chatgpt), true);
         assert!(presets.iter().any(|preset| preset.id == "gpt-5.5"));
+    }
+
+    #[test]
+    fn gpt_5_6_presets_expose_max_and_ultra_where_supported() {
+        let presets = builtin_model_presets(Some(AuthMode::Chatgpt), true);
+        let sol = presets
+            .iter()
+            .find(|preset| preset.id == "gpt-5.6-sol")
+            .expect("gpt-5.6-sol preset");
+        let terra = presets
+            .iter()
+            .find(|preset| preset.id == "gpt-5.6-terra")
+            .expect("gpt-5.6-terra preset");
+        let luna = presets
+            .iter()
+            .find(|preset| preset.id == "gpt-5.6-luna")
+            .expect("gpt-5.6-luna preset");
+
+        for preset in [sol, terra] {
+            assert!(
+                preset
+                    .supported_reasoning_efforts
+                    .iter()
+                    .any(|option| option.effort == ReasoningEffort::Max)
+            );
+            assert!(
+                preset
+                    .supported_reasoning_efforts
+                    .iter()
+                    .any(|option| option.effort == ReasoningEffort::Ultra)
+            );
+        }
+        assert!(
+            luna.supported_reasoning_efforts
+                .iter()
+                .any(|option| option.effort == ReasoningEffort::Max)
+        );
+        assert!(
+            luna.supported_reasoning_efforts
+                .iter()
+                .all(|option| option.effort != ReasoningEffort::Ultra)
+        );
     }
 
     #[test]

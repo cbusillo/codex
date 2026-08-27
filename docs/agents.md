@@ -19,9 +19,11 @@ instructions = "Preamble added to this agent’s prompt"
 Field recap: `name` (slug/alias), `command` (absolute paths ok), `args*` (RO/RW lists override base), `env`, `read_only`, `enabled`, optional `description` and `instructions`.
 
 ### Built-in defaults
-If no `[[agents]]` are configured, Every Code advertises built-in agent/model selectors (gated by env `CODE_ENABLE_CLOUD_AGENT_MODEL` for cloud variants): `code-gpt-5.5`, `code-gpt-5.4`, `code-gpt-5.4-mini`, `claude-opus-4.8`, `antigravity`, `claude-sonnet-4.6`, `claude-haiku-4.5`, `qwen3-coder-plus`, `cloud-gpt-5.1-codex-max`. Built-ins strip any user `--model/-m` flags to avoid conflicts and inject their own when the target CLI supports model flags.
+If no `[[agents]]` are configured, Every Code advertises built-in agent/model selectors (gated by env `CODE_ENABLE_CLOUD_AGENT_MODEL` for cloud variants): `code-gpt-5.5`, `code-gpt-5.4`, `code-gpt-5.4-mini`, `claude-opus-5`, `claude-fable-5`, `antigravity`, `claude-sonnet-4.6`, `claude-haiku-4.5`, `qwen3-coder-plus`, `cloud-gpt-5.1-codex-max`. Built-ins strip any user `--model/-m` flags to avoid conflicts and inject their own when the target CLI supports model flags.
 
 `code-gpt-5.4` is the GPT selector to reach for when correctness or very large context matters. In Every Code, GPT-5.4 defaults to the expensive 1m-token context path (`context_mode = "auto"`) so long histories and broad repository sweeps can survive. Suggest it only when preserving that context is worth the added cost; use `context_mode = "disabled"` to keep GPT-5.4 on its standard context window.
+
+`claude-fable-5` is a very expensive Anthropic specialist model. Do not use it for routine work or ordinary multi-agent diversity. Select it only when the user explicitly asks for Fable, or as a last resort for a genuinely difficult problem that other capable agents could not solve.
 
 Tip: `antigravity` uses Google's Antigravity CLI (`agy`) as the Google/Gemini-family agent path. Gemini/Google intent can resolve to `antigravity`, but AGY uses its configured model rather than a per-run Gemini Pro/Flash flag. Consumer Gemini CLI is no longer a built-in default; configure it manually only when you intentionally rely on enterprise/API-key Gemini CLI access.
 
@@ -30,7 +32,7 @@ Tip: `antigravity` uses Google's Antigravity CLI (`agy`) as the Google/Gemini-fa
 [[subagents.commands]]
 name = "plan"                     # slash name (/plan, /solve, /code, or custom)
 read_only = true                  # default plan/solve=true, code=false
-agents = ["code-gpt-5.4", "claude-opus-4.8"]  # falls back to enabled agents or built-ins
+agents = ["code-gpt-5.4", "claude-opus-5"]  # falls back to enabled agents or built-ins
 orchestrator_instructions = "Guidance for the Every Code agent before spawning agents"
 agent_instructions = "Preamble added to each spawned agent"
 ```
@@ -110,7 +112,7 @@ enabled = true
 [[subagents.commands]]
 name = "context"
 read_only = true
-agents = ["code-gpt-5.4", "claude-opus-4.8"]
+agents = ["code-gpt-5.4", "claude-opus-5"]
 orchestrator_instructions = "Have each agent summarize the most relevant files and tests."
 agent_instructions = "Return paths plus 1–2 sentence rationale; do not edit files."
 ```

@@ -111,7 +111,9 @@ impl SlashCommand {
             SlashCommand::Plan => "create a comprehensive plan (multiple agents)",
             SlashCommand::Solve => "solve a challenging problem (multiple agents)",
             SlashCommand::Code => "perform a coding task (multiple agents)",
-            SlashCommand::Reasoning => "change reasoning effort (minimal/low/medium/high)",
+            SlashCommand::Reasoning => {
+                "change reasoning effort (minimal/low/medium/high/xhigh/max/ultra)"
+            }
             SlashCommand::Verbosity => "change text verbosity (high/medium/low)",
             SlashCommand::New => "start a new chat during a conversation",
             SlashCommand::Init => "create an AGENTS.md file with instructions for Code",

@@ -325,6 +325,37 @@ mod tests {
         });
     }
 
+    #[test]
+    fn requested_model_headers_use_gpt_5_6_minimum_version() {
+        with_originator_env_cleared(|| {
+            let client = reqwest::Client::new();
+            let request = client
+                .get("https://example.com")
+                .headers(requested_model_headers(
+                    Some("test_originator"),
+                    "gpt-5.6-sol",
+                ))
+                .build()
+                .expect("request should build");
+
+            let version = request
+                .headers()
+                .get("version")
+                .expect("version header")
+                .to_str()
+                .expect("version header value");
+            assert_eq!(version, "0.144.0");
+
+            let user_agent = request
+                .headers()
+                .get(reqwest::header::USER_AGENT)
+                .expect("user-agent header")
+                .to_str()
+                .expect("user-agent header value");
+            assert!(user_agent.starts_with("test_originator/0.144.0"));
+        });
+    }
+
     #[tokio::test]
     async fn test_create_client_sets_default_headers() {
         use wiremock::Mock;

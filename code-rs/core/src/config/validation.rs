@@ -233,8 +233,10 @@ fn upgrade_legacy_model_slug(slug: &str) -> Option<String> {
     if slug.eq_ignore_ascii_case("claude-opus-4.1")
         || slug.eq_ignore_ascii_case("claude-opus-4.5")
         || slug.eq_ignore_ascii_case("claude-opus-4.6")
+        || slug.eq_ignore_ascii_case("claude-opus-4.7")
+        || slug.eq_ignore_ascii_case("claude-opus-4.8")
     {
-        return Some("claude-opus-4.8".to_string());
+        return Some("claude-opus-5".to_string());
     }
 
     // Upgrade Anthropic Sonnet 4.5 to 4.6.

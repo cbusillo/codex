@@ -69,7 +69,7 @@ changing the documented spelling.
 - Routing entries live under `[[auto_drive.model_routing_entries]]` with:
   - `model` (`gpt-*`),
   - `enabled` (bool),
-  - `reasoning_levels` (array, any of `minimal|low|medium|high|xhigh`),
+  - `reasoning_levels` (array, any of `minimal|low|medium|high|xhigh|max|ultra`),
   - `description` (free text shown to the coordinator as usage guidance).
 - If routing is enabled, at least one routing entry must remain enabled.
 - All of these can be changed from `/auto settings` in the TUI or directly in `config.toml`.

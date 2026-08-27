@@ -34,6 +34,12 @@ static MIN_WIRE_COMPAT_VERSION: LazyLock<String> = LazyLock::new(|| {
 static MODEL_MINIMUM_CLIENT_VERSIONS: LazyLock<HashMap<String, String>> =
     LazyLock::new(|| parse_model_minimum_client_versions(MODELS_MANIFEST));
 
+const EVERY_CODE_MODEL_MINIMUM_CLIENT_VERSIONS: &[(&str, &str)] = &[
+    ("gpt-5.6-sol", "0.144.0"),
+    ("gpt-5.6-terra", "0.144.0"),
+    ("gpt-5.6-luna", "0.144.0"),
+];
+
 fn max_semver<'a>(current: &'a str, candidate: &'a str) -> &'a str {
     let Some(current_triplet) = parse_semver_triplet(current) else {
         return candidate;
@@ -113,6 +119,14 @@ fn parse_model_minimum_client_versions(input: &str) -> HashMap<String, String> {
         };
 
         versions.insert(slug.to_ascii_lowercase(), candidate.to_string());
+    }
+
+    for (slug, candidate) in EVERY_CODE_MODEL_MINIMUM_CLIENT_VERSIONS {
+        if parse_semver_triplet(candidate).is_none() {
+            continue;
+        }
+
+        versions.insert(slug.to_ascii_lowercase(), (*candidate).to_string());
     }
 
     versions
@@ -240,8 +254,37 @@ mod tests {
     }
 
     #[test]
+    fn parse_model_minimum_client_versions_includes_every_code_overrides() {
+        let input = r#"{"models": []}"#;
+        let versions = parse_model_minimum_client_versions(input);
+
+        assert_eq!(versions.get("gpt-5.6-sol"), Some(&"0.144.0".to_string()));
+        assert_eq!(
+            versions.get("gpt-5.6-terra"),
+            Some(&"0.144.0".to_string())
+        );
+        assert_eq!(versions.get("gpt-5.6-luna"), Some(&"0.144.0".to_string()));
+    }
+
+    #[test]
     fn wire_compatible_version_for_model_raises_for_gpt_5_5() {
         assert_eq!(wire_compatible_version_for_model("gpt-5.5"), "0.124.0");
+    }
+
+    #[test]
+    fn wire_compatible_version_for_model_raises_for_gpt_5_6() {
+        assert_eq!(
+            wire_compatible_version_for_model("gpt-5.6-sol"),
+            "0.144.0"
+        );
+        assert_eq!(
+            wire_compatible_version_for_model("openai/gpt-5.6-terra"),
+            "0.144.0"
+        );
+        assert_eq!(
+            wire_compatible_version_for_model("gpt-5.6-luna"),
+            "0.144.0"
+        );
     }
 
     #[test]

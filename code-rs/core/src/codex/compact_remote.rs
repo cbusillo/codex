@@ -3,8 +3,10 @@ use std::sync::Arc;
 use super::compact::{
     apply_emergency_compaction_fallback,
     is_context_overflow_error,
+    perform_compaction,
     prune_orphan_tool_outputs,
     response_input_from_core_items,
+    run_inline_auto_compact_task,
     sanitize_items_for_compact,
     send_compaction_checkpoint_warning,
 };
@@ -29,6 +31,19 @@ const MAX_REMOTE_COMPACT_CONTEXT_OVERFLOW_RETRIES: usize = 1;
 const REMOTE_COMPACT_OVERFLOW_RECENT_ITEM_LIMIT: usize = 64;
 const MAX_REMOTE_COMPACT_USAGE_LIMIT_RETRIES: usize = 2;
 
+fn is_remote_compact_unavailable_error(err: &CodexErr) -> bool {
+    matches!(
+        err,
+        CodexErr::UnexpectedStatus(response)
+            if matches!(
+                response.status,
+                reqwest::StatusCode::NOT_FOUND
+                    | reqwest::StatusCode::METHOD_NOT_ALLOWED
+                    | reqwest::StatusCode::NOT_IMPLEMENTED
+            )
+    )
+}
+
 pub(super) async fn run_inline_remote_auto_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
@@ -37,6 +52,12 @@ pub(super) async fn run_inline_remote_auto_compact_task(
     let sub_id = sess.next_internal_sub_id();
     match run_remote_compact_task_inner(&sess, &turn_context, &sub_id, extra_input).await {
         Ok(history) => history,
+        Err(err) if is_remote_compact_unavailable_error(&err) => {
+            tracing::warn!(
+                "Remote compact endpoint is unavailable ({err}); falling back to local compaction"
+            );
+            run_inline_auto_compact_task(sess, turn_context).await
+        }
         Err(err) => {
             let event = sess.make_event(
                 &sub_id,
@@ -56,12 +77,25 @@ pub(super) async fn run_remote_compact_task(
     sub_id: String,
     extra_input: Vec<InputItem>,
 ) -> CodexResult<()> {
-    match run_remote_compact_task_inner(&sess, &turn_context, &sub_id, extra_input).await {
+    match run_remote_compact_task_inner(
+        &sess,
+        &turn_context,
+        &sub_id,
+        extra_input.clone(),
+    )
+    .await
+    {
         Ok(_history) => {
             // Mirror local compaction behaviour: clear the running task when the
             // compaction finished successfully so the UI can unblock.
             sess.remove_task(&sub_id);
             Ok(())
+        }
+        Err(err) if is_remote_compact_unavailable_error(&err) => {
+            tracing::warn!(
+                "Remote compact endpoint is unavailable ({err}); falling back to local compaction"
+            );
+            perform_compaction(sess, turn_context, sub_id, extra_input, true).await
         }
         Err(err) => {
             let event = sess.make_event(
@@ -186,6 +220,7 @@ async fn run_remote_compact_task_inner(
                 retries = 0;
                 continue;
             }
+            Err(err) if is_remote_compact_unavailable_error(&err) => return Err(err),
             Err(err) => {
                 if retries < max_retries {
                     retries += 1;
@@ -249,7 +284,9 @@ fn trim_remote_compact_input_after_overflow(turn_items: &mut Vec<ResponseItem>) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::UnexpectedResponseError;
     use code_protocol::models::ContentItem;
+    use reqwest::StatusCode;
 
     fn user_item(text: &str) -> ResponseItem {
         ResponseItem::Message {
@@ -288,5 +325,39 @@ mod tests {
 
         assert_eq!(removed, 0);
         assert_eq!(items.len(), 1);
+    }
+
+    #[test]
+    fn unavailable_remote_compact_endpoint_falls_back_without_retrying() {
+        for status in [
+            StatusCode::NOT_FOUND,
+            StatusCode::METHOD_NOT_ALLOWED,
+            StatusCode::NOT_IMPLEMENTED,
+        ] {
+            let error = CodexErr::UnexpectedStatus(UnexpectedResponseError {
+                status,
+                body: r#"{"detail":"Not Found"}"#.to_string(),
+                request_id: None,
+            });
+
+            assert!(is_remote_compact_unavailable_error(&error));
+        }
+    }
+
+    #[test]
+    fn transient_remote_compact_errors_keep_existing_retry_behavior() {
+        for status in [
+            StatusCode::TOO_MANY_REQUESTS,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ] {
+            let error = CodexErr::UnexpectedStatus(UnexpectedResponseError {
+                status,
+                body: "temporary failure".to_string(),
+                request_id: None,
+            });
+
+            assert!(!is_remote_compact_unavailable_error(&error));
+        }
     }
 }

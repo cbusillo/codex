@@ -213,7 +213,7 @@ pub fn external_agent_command_exists(command: &str) -> bool {
     resolve_external_agent_command_path(command).is_some()
 }
 
-use crate::agent_defaults::{agent_model_spec, default_params_for};
+use crate::agent_defaults::{FABLE_AGENT_GUIDANCE, agent_model_spec, default_params_for};
 use shlex::split as shlex_split;
 use crate::config_types::AgentConfig;
 use crate::openai_tools::JsonSchema;
@@ -2608,17 +2608,13 @@ async fn execute_model_with_permissions_detailed(
     let built_in_cloud = family == "cloud" && config.is_none();
 
     // Clamp reasoning effort to what the target model supports.
-    let clamped_effort = match reasoning_effort {
-        code_protocol::config_types::ReasoningEffort::XHigh => {
-            let lower = slug_for_defaults.to_ascii_lowercase();
-            if lower.contains("max") {
-                reasoning_effort
-            } else {
-                code_protocol::config_types::ReasoningEffort::High
-            }
-        }
-        other => other,
-    };
+    let target_model = slug_for_defaults
+        .strip_prefix("code-")
+        .or_else(|| slug_for_defaults.strip_prefix("cloud-"))
+        .unwrap_or(slug_for_defaults);
+    let clamped_effort: code_protocol::config_types::ReasoningEffort =
+        crate::reasoning::clamp_reasoning_effort_for_model(target_model, reasoning_effort.into())
+            .into();
 
     // Configuration overrides for Codex CLI families. External CLIs
     // (antigravity, claude, gemini, copilot, qwen) do not understand our config
@@ -3451,9 +3447,9 @@ pub fn create_agent_tool(allowed_models: &[String]) -> OpenAiTool {
                     Some(allowed_models.iter().cloned().collect())
                 },
             }),
-                description: Some(
-                    "Optional array of agent/model selector slugs. For explicit multi-agent or dissent requests, prefer diverse families when useful and budget allows (for example ['code-gpt-5.5','claude-sonnet-4.6','antigravity']). For multi-agent release/workflow, infrastructure, security, or product-risk work, proactively use `antigravity` for Google/Gemini-family perspective unless there is a clear reason to skip it; AGY uses its configured model rather than per-run Gemini Pro/Flash selection. If you skip an obvious family, briefly explain why.".to_string(),
-                ),
+            description: Some(format!(
+                "Optional array of agent/model selector slugs. For explicit multi-agent or dissent requests, prefer diverse families when useful and budget allows (for example ['code-gpt-5.5','claude-sonnet-4.6','antigravity']). For multi-agent release/workflow, infrastructure, security, or product-risk work, proactively use `antigravity` for Google/Gemini-family perspective unless there is a clear reason to skip it; AGY uses its configured model rather than per-run Gemini Pro/Flash selection. If you skip an obvious family, briefly explain why. Fable restriction: {FABLE_AGENT_GUIDANCE}"
+            )),
         },
     );
     create_properties.insert(
@@ -5809,10 +5805,11 @@ exit 0
     }
 
     #[test]
-    fn agent_tool_models_description_guides_google_family_delegation() {
+    fn agent_tool_models_description_guides_specialized_delegation() {
         let tool = create_agent_tool(&[
             "code-gpt-5.5".to_string(),
             "claude-sonnet-4.6".to_string(),
+            "claude-fable-5".to_string(),
             "antigravity".to_string(),
         ]);
 
@@ -5837,12 +5834,15 @@ exit 0
         assert!(description.contains("release/workflow, infrastructure, security, or product-risk"));
         assert!(description.contains("unless there is a clear reason to skip it"));
         assert!(description.contains("AGY uses its configured model"));
+        assert!(description.contains("Fable restriction"));
+        assert!(description.contains(FABLE_AGENT_GUIDANCE));
 
         let JsonSchema::String { allowed_values, .. } = items.as_ref() else {
             panic!("models items should be strings");
         };
         let values = allowed_values.as_ref().expect("allowed models");
         assert!(values.contains(&"antigravity".to_string()));
+        assert!(values.contains(&"claude-fable-5".to_string()));
     }
 
     #[tokio::test]

@@ -31,6 +31,23 @@ const GPT5_FRONTIER_EFFORTS: &[ReasoningEffort] = &[
     ReasoningEffort::XHigh,
 ];
 
+const GPT5_6_SOL_TERRA_EFFORTS: &[ReasoningEffort] = &[
+    ReasoningEffort::Low,
+    ReasoningEffort::Medium,
+    ReasoningEffort::High,
+    ReasoningEffort::XHigh,
+    ReasoningEffort::Max,
+    ReasoningEffort::Ultra,
+];
+
+const GPT5_6_LUNA_EFFORTS: &[ReasoningEffort] = &[
+    ReasoningEffort::Low,
+    ReasoningEffort::Medium,
+    ReasoningEffort::High,
+    ReasoningEffort::XHigh,
+    ReasoningEffort::Max,
+];
+
 const GPT5_CODEX_EFFORTS: &[ReasoningEffort] = &[
     ReasoningEffort::Low,
     ReasoningEffort::Medium,
@@ -69,7 +86,9 @@ fn reasoning_effort_rank(effort: ReasoningEffort) -> u8 {
         ReasoningEffort::Medium => 2,
         ReasoningEffort::High => 3,
         ReasoningEffort::XHigh => 4,
-        ReasoningEffort::None => 5,
+        ReasoningEffort::Max => 5,
+        ReasoningEffort::Ultra => 6,
+        ReasoningEffort::None => 7,
     }
 }
 
@@ -90,6 +109,14 @@ pub fn supported_reasoning_efforts_for_model(model: &str) -> &'static [Reasoning
 
     if lower.starts_with("gpt-5.1") {
         return GPT5_1_EFFORTS;
+    }
+
+    if lower.starts_with("gpt-5.6-sol") || lower.starts_with("gpt-5.6-terra") {
+        return GPT5_6_SOL_TERRA_EFFORTS;
+    }
+
+    if lower.starts_with("gpt-5.6-luna") {
+        return GPT5_6_LUNA_EFFORTS;
     }
 
     if lower.starts_with("gpt-5.5")
@@ -173,5 +200,25 @@ mod tests {
     fn gpt5_4_supports_xhigh() {
         let clamped = clamp_reasoning_effort_for_model("gpt-5.4", ReasoningEffort::XHigh);
         assert_eq!(clamped, ReasoningEffort::XHigh);
+    }
+
+    #[test]
+    fn gpt5_6_sol_supports_max_and_ultra() {
+        assert_eq!(
+            clamp_reasoning_effort_for_model("gpt-5.6-sol", ReasoningEffort::Max),
+            ReasoningEffort::Max
+        );
+        assert_eq!(
+            clamp_reasoning_effort_for_model("gpt-5.6-sol", ReasoningEffort::Ultra),
+            ReasoningEffort::Ultra
+        );
+    }
+
+    #[test]
+    fn gpt5_6_luna_clamps_ultra_to_max() {
+        assert_eq!(
+            clamp_reasoning_effort_for_model("gpt-5.6-luna", ReasoningEffort::Ultra),
+            ReasoningEffort::Max
+        );
     }
 }

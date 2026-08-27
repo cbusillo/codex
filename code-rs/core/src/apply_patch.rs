@@ -22,6 +22,14 @@ use std::path::PathBuf;
 
 pub const CODEX_APPLY_PATCH_ARG1: &str = "--codex-run-as-apply-patch";
 
+fn truncate_at_char_boundary(value: &mut String, max_len: usize) {
+    let mut boundary = max_len.min(value.len());
+    while boundary > 0 && !value.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    value.truncate(boundary);
+}
+
 pub(crate) struct ApplyPatchRun {
     pub auto_approved: bool,
     pub stdout: String,
@@ -108,7 +116,7 @@ pub(crate) async fn apply_patch(
                         }
                         let mut msg = finding.message.clone();
                         if msg.len() > 160 {
-                            msg.truncate(157);
+                            truncate_at_char_boundary(&mut msg, 157);
                             msg.push_str("…");
                         }
                         parts.push(msg);
@@ -190,6 +198,20 @@ pub(crate) async fn apply_patch(
         success,
         harness_summary_json,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_at_char_boundary;
+
+    #[test]
+    fn truncates_validation_message_on_char_boundary() {
+        let mut message = format!("{}{}", "a".repeat(156), "\u{00e9}".repeat(3));
+
+        truncate_at_char_boundary(&mut message, 157);
+
+        assert_eq!(message, "a".repeat(156));
+    }
 }
 
 pub(crate) fn convert_apply_patch_to_protocol(

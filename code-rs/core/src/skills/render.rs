@@ -8,54 +8,43 @@ pub fn render_skills_section(skills: &[SkillMetadata]) -> Option<String> {
         .iter()
         .filter(|skill| skill.allow_implicit_invocation())
         .collect();
-    let manual_skills: Vec<&SkillMetadata> = skills
-        .iter()
-        .filter(|skill| !skill.allow_implicit_invocation())
-        .collect();
 
-    if implicit_skills.is_empty() && manual_skills.is_empty() {
+    if implicit_skills.is_empty() {
         return None;
     }
 
     let mut lines: Vec<String> = Vec::new();
     lines.push("## Skills".to_string());
-    lines.push("A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below are the implicitly invokable skills whose descriptions can trigger use. Skill bodies live on disk and should be opened only when the trigger rules say to use the skill.".to_string());
+    lines.push("A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below are the implicitly invokable skills whose descriptions can trigger use. Each entry includes a name, description, and file path so you can open the source for full instructions when using a specific skill.".to_string());
 
-    if !implicit_skills.is_empty() {
-        lines.push("### Available skills".to_string());
+    lines.push("### Available skills".to_string());
 
-        for skill in implicit_skills {
-            let path_str = skill.path.to_string_lossy().replace('\\', "/");
-            let name = skill.name.as_str();
-            let description = skill.description.as_str();
-            lines.push(format!("- {name}: {description} (file: {path_str})"));
-            lines.extend(render_structured_skill_guidance(skill));
-            lines.extend(render_command_policy_summary(skill));
-        }
-    }
-
-    if !manual_skills.is_empty() {
-        lines.push("### Manual-only skills".to_string());
-        lines.push("These skills are discoverable but not implicitly invokable. Use them only when the user explicitly names them with `$<skill-name>` or when the skill body has already been injected into the conversation.".to_string());
-        for skill in manual_skills {
-            let name = skill.name.as_str();
-            lines.push(format!("- {name}"));
-        }
+    for skill in implicit_skills {
+        let path_str = skill.path.to_string_lossy().replace('\\', "/");
+        let name = skill.name.as_str();
+        let description = skill.description.as_str();
+        lines.push(format!("- {name}: {description} (file: {path_str})"));
+        lines.extend(render_structured_skill_guidance(skill));
+        lines.extend(render_command_policy_summary(skill));
     }
 
     lines.push("### How to use skills".to_string());
     lines.push(
-        r###"- Discovery: The "Available skills" list is for implicit routing; descriptions there can trigger skill use. The "Manual-only skills" list is name-only so the user can explicitly invoke those skills without adding their instructions to every turn.
-- Trigger rules: If the user names an available skill in plain text, or the task clearly matches an available skill's description, you must use that skill for that turn. If the user explicitly names any skill with `$<skill-name>`, use it for that turn when the skill body is available or can be opened. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.
-- Missing/blocked: If an explicitly named skill body is already injected in the conversation, follow it even if the skill is not in the available-skills list. If a named skill cannot be opened or its body is unavailable, say so briefly and continue with the best fallback.
+        r###"- Discovery: The "Available skills" list is for implicit routing; descriptions there can trigger skill use. Skill bodies live on disk at the listed paths.
+- Trigger rules: If the user names an available skill in plain text, or the task clearly matches an available skill's description, you must use that skill for that turn. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.
+- Mandatory triggers: If a skill description says it MUST be used, treat that as a hard requirement in the described context. Open its `SKILL.md` before taking other investigative or implementation actions for that turn.
+- Delegated triggers: If a skill description tells you to use another named skill for a subdomain, find that delegated skill in the Available Skills list above and open its `SKILL.md` before taking actions in that subdomain.
+- Missing/blocked: If a named skill isn't in the available-skills list or the path can't be read, say so briefly and continue with the best fallback.
 - How to use a skill (progressive disclosure):
-  1) After deciding to use a skill, open its `SKILL.md`. Read only enough to follow the workflow.
+  1) Open the selected skill's `SKILL.md`. Read only enough to follow the workflow.
   2) When `SKILL.md` references bundled skill resources or scripts with relative paths such as `scripts/foo.py`, resolve them relative to the directory containing that `SKILL.md` first, and only consider other paths if needed.
   3) If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request; don't bulk-load everything.
   4) If `scripts/` exist, prefer running or patching them instead of retyping large code blocks.
   5) If `assets/` or templates exist, reuse them instead of recreating from scratch.
 - Coordination and sequencing:
-  - If multiple skills apply, choose the minimal set that covers the request and state the order you'll use them.
+  - Match skills independently against every part of the request. One relevant skill does not suppress another: for example, regression investigation and durable GitHub planning can require separate skills in the same turn.
+  - If multiple skills apply, use all relevant mandatory or delegated skills before ordinary work. Do not choose only one when another skill also matches the user's request.
+  - For non-binding matches, choose the minimal set that covers the request and state the order you'll use them.
   - Announce which skill(s) you're using and why (one short line). If you skip an obvious skill, say why.
 - Context hygiene:
   - Keep context small: summarize long sections instead of pasting them; only load extra files when needed.
@@ -174,33 +163,32 @@ mod tests {
 
         assert!(rendered.contains("- implicit: implicit description"));
         assert!(!rendered.contains("- manual: manual description"));
-        assert!(rendered.contains("### Manual-only skills"));
-        assert!(rendered.contains("- manual"));
+        assert!(!rendered.contains("### Manual-only skills"));
+        assert!(!rendered.contains("- manual"));
         assert!(!rendered.contains("manual description"));
     }
 
     #[test]
-    fn render_skills_section_lists_only_manual_skill_names() {
+    fn render_skills_section_omits_manual_only_skill_names() {
         let rendered = render_skills_section(&[skill("manual", Some(false))]);
 
-        let rendered = rendered.expect("manual skill names should render");
-        assert!(!rendered.contains("### Available skills"));
-        assert!(rendered.contains("### Manual-only skills"));
-        assert!(rendered.contains("- manual"));
-        assert!(!rendered.contains("manual description"));
+        assert!(rendered.is_none());
     }
 
     #[test]
-    fn render_skills_section_avoids_exhaustive_missing_skill_language() {
+    fn render_skills_section_preserves_binding_trigger_language() {
         let rendered = render_skills_section(&[
             skill("implicit", None),
             skill("manual", Some(false)),
         ])
         .expect("skills should render");
 
-        assert!(!rendered.contains("the skills available in this session"));
-        assert!(!rendered.contains("isn't in the list"));
-        assert!(rendered.contains("If an explicitly named skill body is already injected"));
+        assert!(rendered.contains("If a skill description says it MUST be used"));
+        assert!(rendered.contains("Open its `SKILL.md` before taking other investigative"));
+        assert!(rendered.contains("find that delegated skill in the Available Skills list"));
+        assert!(rendered.contains("Match skills independently against every part of the request"));
+        assert!(rendered.contains("use all relevant mandatory or delegated skills"));
+        assert!(!rendered.contains("After deciding to use a skill"));
     }
 
     #[test]
@@ -312,11 +300,8 @@ mod tests {
             purpose: "Create and save a new plan".to_string(),
         }];
 
-        let rendered = render_skills_section(&[skill]).expect("manual skill should render");
+        let rendered = render_skills_section(&[skill]);
 
-        assert!(rendered.contains("### Manual-only skills"));
-        assert!(rendered.contains("- manual-plan"));
-        assert!(!rendered.contains("command `create-plan`"));
-        assert!(!rendered.contains("Helper to create a plan"));
+        assert!(rendered.is_none());
     }
 }

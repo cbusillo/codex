@@ -678,6 +678,19 @@ def summarize(events: list[dict[str, Any]], paths: RunPaths, returncode: int, co
                 "stdout": msg.get("stdout"),
                 "stderr": msg.get("stderr"),
             })
+        elif msg_type == "custom_tool_call_end" and msg.get("tool_name") == "wait":
+            waited_call_id = ((msg.get("parameters") or {}).get("call_id"))
+            result_payload = msg.get("result") or {}
+            wait_result = result_payload.get("Ok") if "Ok" in result_payload else result_payload.get("Err")
+            completed = parse_wait_completed_command(wait_result)
+            if isinstance(waited_call_id, str) and completed is not None:
+                commands.append({
+                    "command": running_commands.pop(waited_call_id, None),
+                    "exit_code": completed.get("exit_code"),
+                    "status": "completed" if completed.get("exit_code") == 0 else "failed",
+                    "stdout": completed.get("stdout") or completed.get("output"),
+                    "stderr": completed.get("stderr"),
+                })
         elif event_type in {"error", "turn.failed"}:
             errors.append(event)
         item = event.get("item") or {}
@@ -688,6 +701,14 @@ def summarize(events: list[dict[str, Any]], paths: RunPaths, returncode: int, co
             commands.append({"command": item.get("command"), "exit_code": item.get("exit_code"), "status": item.get("status")})
         elif event_type == "item.completed" and item_type == "file_change":
             file_changes.append(item)
+
+    for call_id, command in running_commands.items():
+        commands.append({
+            "command": command,
+            "exit_code": None,
+            "status": "started",
+            "call_id": call_id,
+        })
 
     gh_calls = []
     gh_log = paths.artifacts / "gh-calls.jsonl"
@@ -713,6 +734,24 @@ def summarize(events: list[dict[str, Any]], paths: RunPaths, returncode: int, co
         "command": command,
         "run_dir": str(paths.run_dir),
     }
+
+
+def parse_wait_completed_command(wait_result: Any) -> dict[str, Any] | None:
+    if not isinstance(wait_result, str):
+        return None
+    try:
+        payload = json.loads(wait_result)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if "exit_code" not in payload and "metadata" in payload and isinstance(payload["metadata"], dict):
+        payload = payload | {"exit_code": payload["metadata"].get("exit_code")}
+    if "exit_code" not in payload and "output" in payload:
+        payload = payload | {"exit_code": 1}
+    if "exit_code" not in payload:
+        return None
+    return payload
 
 
 def session_id_from_summary(summary: dict[str, Any]) -> str:
@@ -784,7 +823,7 @@ def assert_expectations(summary: dict[str, Any], scenario: dict[str, Any]) -> li
             failures.append(f"assistant message did not contain {needle!r}")
     for needle in expect.get("command_contains", []):
         if not any(str(needle) in str(command.get("command")) for command in summary.get("commands", [])):
-            failures.append(f"no completed command contained {needle!r}")
+            failures.append(f"no command contained {needle!r}")
     for needle in expect.get("gh_contains", []):
         text = "\n".join(" ".join(call.get("argv", [])) for call in summary.get("gh_calls", []))
         if str(needle) not in text:

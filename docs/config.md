@@ -74,7 +74,7 @@ env_key = "MISTRAL_API_KEY"
 Or a proxy that converts OpenAI-compatible requests to another vendor (e.g., Anthropic or Gemini):
 
 ```toml
-model = "claude-opus-4.8"
+model = "claude-opus-5"
 model_provider = "claude-proxy"
 
 [model_providers.claude-proxy]
@@ -305,8 +305,13 @@ If the selected model is known to support reasoning (for example: `o3`, `o4-mini
 - `"low"`
 - `"medium"` (default)
 - `"high"`
+- `"xhigh"`
+- `"max"`
+- `"ultra"`
 
-Note: to minimize reasoning, choose `"minimal"`.
+Supported values depend on the selected model. To minimize reasoning, choose
+`"minimal"`; `"ultra"` uses maximum inference effort and enables the strongest
+agent behavior where supported.
 
 ## model_reasoning_summary
 
@@ -474,7 +479,7 @@ tool_timeout_sec = 30
 
 Sub-agents are orchestrated helper workflows you can trigger with slash commands (for example `/plan`, `/solve`, `/code`). Each entry under `[[subagents.commands]]` defines the slash command name, whether spawned agents run in read-only mode, which `agents` to launch, and extra guidance for both the orchestrator (Code) and the individual agents.
 
-By default (when no `[[agents]]` are configured) Code advertises these agent/model selectors for multi-agent runs: `code-gpt-5.5`, `code-gpt-5.4`, `code-gpt-5.4-mini`, `claude-opus-4.8`, `antigravity`, `claude-sonnet-4.6`, `claude-haiku-4.5`, and `qwen3-coder-plus`. The cloud counterpart, `cloud-gpt-5.1-codex-max`, only appears when `CODE_ENABLE_CLOUD_AGENT_MODEL=1` is set. You can override the list by defining `[[agents]]` entries or by specifying `agents = [ … ]` on a given `[[subagents.commands]]` entry. Consumer Gemini CLI is not a built-in default; add a custom `[[agents]]` block only when you intentionally rely on enterprise/API-key Gemini CLI access. Legacy Gemini-style agent selectors are treated as Google-family intent and resolve to `antigravity`, which still uses AGY's configured model. The built-in guidance asks the Every Code agent to proactively include `antigravity` for Google/Gemini-family perspective on multi-agent release/workflow, infrastructure, security, and product-risk work unless there is a clear reason to skip it.
+By default (when no `[[agents]]` are configured) Code advertises these agent/model selectors for multi-agent runs: `code-gpt-5.5`, `code-gpt-5.4`, `code-gpt-5.4-mini`, `claude-opus-5`, `claude-fable-5`, `antigravity`, `claude-sonnet-4.6`, `claude-haiku-4.5`, and `qwen3-coder-plus`. The cloud counterpart, `cloud-gpt-5.1-codex-max`, only appears when `CODE_ENABLE_CLOUD_AGENT_MODEL=1` is set. You can override the list by defining `[[agents]]` entries or by specifying `agents = [ … ]` on a given `[[subagents.commands]]` entry. `claude-fable-5` is a very expensive specialist model and should only be selected when the user explicitly asks for Fable, or as a last resort after other capable agents cannot solve a genuinely difficult problem. Consumer Gemini CLI is not a built-in default; add a custom `[[agents]]` block only when you intentionally rely on enterprise/API-key Gemini CLI access. Legacy Gemini-style agent selectors are treated as Google-family intent and resolve to `antigravity`, which still uses AGY's configured model. The built-in guidance asks the Every Code agent to proactively include `antigravity` for Google/Gemini-family perspective on multi-agent release/workflow, infrastructure, security, and product-risk work unless there is a clear reason to skip it.
 
 `code-gpt-5.4` is the GPT selector for tasks where correctness or very large context matters. In Every Code, GPT-5.4 defaults to the more expensive 1m-token context path (`context_mode = "auto"`) so preserving a large history, sweeping a broad repository, or recovering from a context-window failure works without extra setup. Use it when that context is worth the added cost; set `context_mode = "disabled"` to keep GPT-5.4 on its standard context window.
 
@@ -1097,7 +1102,7 @@ Project commands appear in the TUI via `/cmd <name>` and run through the standar
 | `tui.notifications` | boolean \| array<string> | Enable desktop notifications in the tui (default: false). |
 | `hide_agent_reasoning` | boolean | Hide model reasoning events. |
 | `show_raw_agent_reasoning` | boolean | Show raw reasoning (when available). |
-| `model_reasoning_effort` | `minimal` \| `low` \| `medium` \| `high` | Responses API reasoning effort. |
+| `model_reasoning_effort` | `minimal` \| `low` \| `medium` \| `high` \| `xhigh` \| `max` \| `ultra` | Responses API reasoning effort. `ultra` uses maximum inference effort and enables the strongest agent behavior where supported. |
 | `model_reasoning_summary` | `auto` \| `concise` \| `detailed` \| `none` | Reasoning summaries. |
 | `model_verbosity` | `low` \| `medium` \| `high` | GPT‑5 text verbosity (Responses API). |
 | `model_supports_reasoning_summaries` | boolean | Force‑enable reasoning summaries. |

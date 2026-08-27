@@ -217,6 +217,8 @@ fn apply_upstream_model_overrides(mut family: ModelFamily) -> ModelFamily {
         code_protocol::openai_models::ReasoningEffort::Medium => ReasoningEffort::Medium,
         code_protocol::openai_models::ReasoningEffort::High => ReasoningEffort::High,
         code_protocol::openai_models::ReasoningEffort::XHigh => ReasoningEffort::XHigh,
+        code_protocol::openai_models::ReasoningEffort::Max => ReasoningEffort::Max,
+        code_protocol::openai_models::ReasoningEffort::Ultra => ReasoningEffort::Ultra,
     });
     family.default_reasoning_summary = model_info.default_reasoning_summary.into();
     family.supports_reasoning_summaries = model_info.supports_reasoning_summaries;
@@ -411,9 +413,9 @@ pub fn find_family_for_model(slug: &str) -> Option<ModelFamily> {
             max_output_tokens: Some(MAX_OUTPUT_DEFAULT),
             truncation_policy: TruncationPolicy::Bytes(10_000),
         )
-    } else if slug.starts_with("gpt-5.5") {
+    } else if slug.starts_with("gpt-5.6") || slug.starts_with("gpt-5.5") {
         model_family!(
-            slug, "gpt-5.5",
+            slug, slug.split('-').take(2).collect::<Vec<_>>().join("-").as_str(),
             supports_reasoning_summaries: true,
             base_instructions: GPT_5_2_INSTRUCTIONS.to_string(),
             apply_patch_tool_type: Some(ApplyPatchToolType::Freeform),

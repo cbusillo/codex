@@ -572,6 +572,8 @@ fn map_reasoning_effort(effort: ProtocolReasoningEffort) -> crate::config_types:
         ProtocolReasoningEffort::Medium => LocalEffort::Medium,
         ProtocolReasoningEffort::High => LocalEffort::High,
         ProtocolReasoningEffort::XHigh => LocalEffort::XHigh,
+        ProtocolReasoningEffort::Max => LocalEffort::Max,
+        ProtocolReasoningEffort::Ultra => LocalEffort::Ultra,
     }
 }
 

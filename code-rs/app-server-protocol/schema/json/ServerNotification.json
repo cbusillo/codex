@@ -4979,7 +4979,9 @@
         "low",
         "medium",
         "high",
-        "xhigh"
+        "xhigh",
+        "max",
+        "ultra"
       ],
       "type": "string"
     },

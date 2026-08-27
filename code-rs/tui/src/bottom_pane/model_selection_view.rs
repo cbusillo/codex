@@ -55,6 +55,8 @@ impl FlatPreset {
 
     fn effort_label(effort: ReasoningEffort) -> &'static str {
         match effort {
+            ReasoningEffort::Ultra => "Ultra",
+            ReasoningEffort::Max => "Max",
             ReasoningEffort::XHigh => "XHigh",
             ReasoningEffort::High => "High",
             ReasoningEffort::Medium => "Medium",
@@ -1006,7 +1008,13 @@ impl ModelSelectionView {
     }
 
     fn model_description(model: &str) -> Option<&'static str> {
-        if model.eq_ignore_ascii_case("gpt-5.5") {
+        if model.eq_ignore_ascii_case("gpt-5.6-sol") {
+            Some("Flagship GPT-5.6 model for high-capability coding, research, and real-world work.")
+        } else if model.eq_ignore_ascii_case("gpt-5.6-terra") {
+            Some("Strong GPT-5.6 model for capable coding work at a lower price point.")
+        } else if model.eq_ignore_ascii_case("gpt-5.6-luna") {
+            Some("Efficient GPT-5.6 model for high-volume coding and quick iteration.")
+        } else if model.eq_ignore_ascii_case("gpt-5.5") {
             Some("Frontier model for complex coding, research, and real-world work.")
         } else if model.eq_ignore_ascii_case("gpt-5.4") {
             Some("Brings together flagship reasoning, coding, and tool use in a single frontier model.")
@@ -1027,17 +1035,21 @@ impl ModelSelectionView {
 
     fn effort_rank(effort: ReasoningEffort) -> u8 {
         match effort {
-            ReasoningEffort::XHigh => 0,
-            ReasoningEffort::High => 1,
-            ReasoningEffort::Medium => 2,
-            ReasoningEffort::Low => 3,
-            ReasoningEffort::Minimal => 4,
-            ReasoningEffort::None => 5,
+            ReasoningEffort::Ultra => 0,
+            ReasoningEffort::Max => 1,
+            ReasoningEffort::XHigh => 2,
+            ReasoningEffort::High => 3,
+            ReasoningEffort::Medium => 4,
+            ReasoningEffort::Low => 5,
+            ReasoningEffort::Minimal => 6,
+            ReasoningEffort::None => 7,
         }
     }
 
     fn effort_label(effort: ReasoningEffort) -> &'static str {
         match effort {
+            ReasoningEffort::Ultra => "Ultra",
+            ReasoningEffort::Max => "Max",
             ReasoningEffort::XHigh => "XHigh",
             ReasoningEffort::High => "High",
             ReasoningEffort::Medium => "Medium",

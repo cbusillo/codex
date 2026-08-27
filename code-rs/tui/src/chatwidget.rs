@@ -24013,7 +24013,10 @@ Have we met every part of this goal and is there no further work to do?"#
     }
 
     fn curated_model_presets(presets: Vec<ModelPreset>) -> Vec<ModelPreset> {
-        const MODEL_PICKER_ORDER: [&str; 3] = [
+        const MODEL_PICKER_ORDER: [&str; 6] = [
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
             "gpt-5.5",
             "gpt-5.4",
             "gpt-5.4-mini",
@@ -24574,7 +24577,9 @@ Have we met every part of this goal and is there no further work to do?"#
                 ReasoningEffort::Medium => 2,
                 ReasoningEffort::High => 3,
                 ReasoningEffort::XHigh => 4,
-                ReasoningEffort::None => 5,
+                ReasoningEffort::Max => 5,
+                ReasoningEffort::Ultra => 6,
+                ReasoningEffort::None => 7,
             }
         }
 
@@ -24618,6 +24623,8 @@ Have we met every part of this goal and is there no further work to do?"#
                 ReasoningEffort::Medium,
                 ReasoningEffort::High,
                 ReasoningEffort::XHigh,
+                ReasoningEffort::Max,
+                ReasoningEffort::Ultra,
             ] {
                 if levels.contains(&level) {
                     normalized.push(level);
@@ -25455,13 +25462,15 @@ Have we met every part of this goal and is there no further work to do?"#
                 "low" => ReasoningEffort::Low,
                 "medium" | "med" => ReasoningEffort::Medium,
                 "xhigh" | "extra-high" | "extra_high" => ReasoningEffort::XHigh,
+                "max" => ReasoningEffort::Max,
+                "ultra" => ReasoningEffort::Ultra,
                 "high" => ReasoningEffort::High,
                 // Backwards compatibility: map legacy values to minimal.
                 "none" | "off" => ReasoningEffort::Minimal,
                 _ => {
                     // Invalid parameter, show error and return
                     let message = format!(
-                        "Invalid reasoning level: '{}'. Use: minimal, low, medium, or high",
+                        "Invalid reasoning level: '{}'. Use: minimal, low, medium, high, xhigh, max, or ultra",
                         trimmed
                     );
                     self.history_push_plain_state(history_cell::new_error_event(message));
@@ -26544,6 +26553,8 @@ Have we met every part of this goal and is there no further work to do?"#
             ReasoningEffort::Medium => "Medium",
             ReasoningEffort::High => "High",
             ReasoningEffort::XHigh => "XHigh",
+            ReasoningEffort::Max => "Max",
+            ReasoningEffort::Ultra => "Ultra",
         }
     }
 
@@ -33839,6 +33850,24 @@ use code_core::protocol::OrderMeta;
 
         assert_eq!(chat.config.model, "gpt-5.4");
         assert_eq!(chat.config.model_reasoning_effort, ReasoningEffort::XHigh);
+    }
+
+    #[test]
+    fn reasoning_command_accepts_max_and_ultra() {
+        let _runtime_guard = enter_test_runtime_guard();
+        let mut harness = ChatWidgetHarness::new();
+        let chat = harness.chat();
+
+        chat.update_model_presets(
+            builtin_model_presets(Some(AuthMode::ChatGPT), true),
+            None,
+        );
+        chat.handle_model_command("gpt-5.6-sol".to_string());
+        chat.handle_reasoning_command("max".to_string());
+        assert_eq!(chat.config.model_reasoning_effort, ReasoningEffort::Max);
+
+        chat.handle_reasoning_command("ultra".to_string());
+        assert_eq!(chat.config.model_reasoning_effort, ReasoningEffort::Ultra);
     }
 
     #[test]

@@ -21,6 +21,8 @@ const CLAUDE_SONNET_READ_ONLY: &[&str] = &["--allowedTools", CLAUDE_ALLOWED_TOOL
 const CLAUDE_SONNET_WRITE: &[&str] = &["--dangerously-skip-permissions"];
 const CLAUDE_OPUS_READ_ONLY: &[&str] = &["--allowedTools", CLAUDE_ALLOWED_TOOLS];
 const CLAUDE_OPUS_WRITE: &[&str] = &["--dangerously-skip-permissions"];
+const CLAUDE_FABLE_READ_ONLY: &[&str] = &["--allowedTools", CLAUDE_ALLOWED_TOOLS];
+const CLAUDE_FABLE_WRITE: &[&str] = &["--dangerously-skip-permissions"];
 const CLAUDE_HAIKU_READ_ONLY: &[&str] = &["--allowedTools", CLAUDE_ALLOWED_TOOLS];
 const CLAUDE_HAIKU_WRITE: &[&str] = &["--dangerously-skip-permissions"];
 const ANTIGRAVITY_READ_ONLY: &[&str] = &[];
@@ -33,22 +35,29 @@ const CLOUD_GPT5_CODEX_READ_ONLY: &[&str] = &[];
 const CLOUD_GPT5_CODEX_WRITE: &[&str] = &[];
 const MODELS_MANIFEST: &str = include_str!("../../../codex-rs/models-manager/models.json");
 
+pub const FABLE_AGENT_GUIDANCE: &str = "VERY EXPENSIVE Anthropic specialist model. Do not use Fable for routine work or ordinary multi-agent diversity. Select it only when the user explicitly asks for Fable, or as a last resort for a genuinely difficult problem that other capable agents could not solve.";
+
 /// Canonical list of built-in agent selectors used when no `[[agents]]`
 /// entries are configured. The ordering here controls priority for legacy
 /// CLI-name lookups.
 pub const DEFAULT_AGENT_NAMES: &[&str] = &[
     // Frontline for moderate/challenging tasks
+    "code-gpt-5.6-sol",
     "code-gpt-5.5",
     "code-gpt-5.4",
-    "claude-opus-4.8",
+    "claude-opus-5",
     "antigravity",
     // Straightforward / cost-aware
+    "code-gpt-5.6-terra",
+    "code-gpt-5.6-luna",
     "code-gpt-5.4-mini",
     "claude-sonnet-4.6",
     "github-copilot",
     // Mixed/general and alternates
     "claude-haiku-4.5",
     "qwen3-coder-plus",
+    // Explicit opt-in / last-resort
+    "claude-fable-5",
     "cloud-gpt-5.1-codex-max",
 ];
 
@@ -91,6 +100,48 @@ impl AgentModelSpec {
 }
 
 const AGENT_MODEL_SPECS: &[AgentModelSpec] = &[
+    AgentModelSpec {
+        slug: "code-gpt-5.6-sol",
+        family: "code",
+        cli: "coder",
+        read_only_args: CODE_GPT5_READ_ONLY,
+        write_args: CODE_GPT5_WRITE,
+        model_args: &["--model", "gpt-5.6-sol"],
+        description: "Frontier GPT-5.6 model for high-capability coding, research, and real-world work.",
+        enabled_by_default: true,
+        aliases: &["gpt-5.6", "gpt-5.6-sol", "code-gpt-5.6"],
+        gating_env: None,
+        is_frontline: true,
+        pro_only: false,
+    },
+    AgentModelSpec {
+        slug: "code-gpt-5.6-terra",
+        family: "code",
+        cli: "coder",
+        read_only_args: CODE_GPT5_READ_ONLY,
+        write_args: CODE_GPT5_WRITE,
+        model_args: &["--model", "gpt-5.6-terra"],
+        description: "Strong GPT-5.6 model for capable coding work at a lower price point.",
+        enabled_by_default: true,
+        aliases: &["gpt-5.6-terra"],
+        gating_env: None,
+        is_frontline: false,
+        pro_only: false,
+    },
+    AgentModelSpec {
+        slug: "code-gpt-5.6-luna",
+        family: "code",
+        cli: "coder",
+        read_only_args: CODE_GPT5_READ_ONLY,
+        write_args: CODE_GPT5_WRITE,
+        model_args: &["--model", "gpt-5.6-luna"],
+        description: "Efficient GPT-5.6 model for high-volume coding and quick iteration.",
+        enabled_by_default: true,
+        aliases: &["gpt-5.6-luna"],
+        gating_env: None,
+        is_frontline: false,
+        pro_only: false,
+    },
     AgentModelSpec {
         slug: "code-gpt-5.5",
         family: "code",
@@ -160,19 +211,21 @@ const AGENT_MODEL_SPECS: &[AgentModelSpec] = &[
         pro_only: false,
     },
     AgentModelSpec {
-        slug: "claude-opus-4.8",
+        slug: "claude-opus-5",
         family: "claude",
         cli: "claude",
         read_only_args: CLAUDE_OPUS_READ_ONLY,
         write_args: CLAUDE_OPUS_WRITE,
-        model_args: &["--model", "claude-opus-4-8"],
-        description: "Higher-capacity Claude model for complex reasoning; use when you want the strongest Claude.",
+        model_args: &["--model", "claude-opus-5"],
+        description: "Most capable Claude model for sustained agentic work and complex reasoning.",
         enabled_by_default: true,
         aliases: &[
             "claude-opus",
             "claude-opus-4.1",
             "claude-opus-4.5",
             "claude-opus-4.6",
+            "claude-opus-4.7",
+            "claude-opus-4.8",
         ],
         gating_env: None,
         is_frontline: true,
@@ -188,6 +241,20 @@ const AGENT_MODEL_SPECS: &[AgentModelSpec] = &[
         description: "Balanced Claude model for implementation and debugging; a solid default when you want Claude.",
         enabled_by_default: true,
         aliases: &["claude", "claude-sonnet", "claude-sonnet-4.5"],
+        gating_env: None,
+        is_frontline: false,
+        pro_only: false,
+    },
+    AgentModelSpec {
+        slug: "claude-fable-5",
+        family: "claude",
+        cli: "claude",
+        read_only_args: CLAUDE_FABLE_READ_ONLY,
+        write_args: CLAUDE_FABLE_WRITE,
+        model_args: &["--model", "claude-fable-5"],
+        description: FABLE_AGENT_GUIDANCE,
+        enabled_by_default: true,
+        aliases: &["fable", "claude-fable"],
         gating_env: None,
         is_frontline: false,
         pro_only: false,
@@ -700,11 +767,33 @@ mod tests {
     #[test]
     fn claude_opus_aliases_resolve_to_current_opus() {
         let opus = agent_model_spec("claude-opus").expect("opus alias present");
-        assert_eq!(opus.slug, "claude-opus-4.8");
-        assert_eq!(opus.model_args, &["--model", "claude-opus-4-8"]);
+        assert_eq!(opus.slug, "claude-opus-5");
+        assert_eq!(opus.model_args, &["--model", "claude-opus-5"]);
 
-        let legacy = agent_model_spec("claude-opus-4.6").expect("legacy opus alias present");
-        assert_eq!(legacy.slug, "claude-opus-4.8");
+        for legacy in ["claude-opus-4.6", "claude-opus-4.7", "claude-opus-4.8"] {
+            let legacy = agent_model_spec(legacy).expect("legacy opus alias present");
+            assert_eq!(legacy.slug, "claude-opus-5");
+        }
+    }
+
+    #[test]
+    fn claude_fable_is_explicitly_guarded_as_an_expensive_fallback() {
+        let fable = agent_model_spec("fable").expect("fable alias present");
+        assert_eq!(fable.slug, "claude-fable-5");
+        assert_eq!(fable.model_args, &["--model", "claude-fable-5"]);
+        assert!(!fable.is_frontline);
+        assert!(fable.description.contains("VERY EXPENSIVE"));
+        assert!(fable.description.contains("user explicitly asks for Fable"));
+        assert!(fable.description.contains("other capable agents could not solve"));
+
+        let guide = model_guide_markdown();
+        assert!(guide.contains("`claude-fable-5`"));
+        assert!(guide.contains(FABLE_AGENT_GUIDANCE));
+        assert!(
+            default_agent_configs()
+                .iter()
+                .any(|agent| agent.name == "claude-fable-5")
+        );
     }
 
     #[test]

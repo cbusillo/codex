@@ -8,7 +8,18 @@ cargo_target_dir="${CARGO_TARGET_DIR:-$code_rs_root/target}"
 if [[ "$cargo_target_dir" != /* ]]; then
 	cargo_target_dir="$(pwd)/$cargo_target_dir"
 fi
-cargo_release_bin="$cargo_target_dir/release/code"
+build_profile="${LOCAL_CODE_REBUILD_PROFILE:-perf}"
+if [[ -z "$build_profile" ]]; then
+	build_profile="perf"
+fi
+cargo_profile_dir="$build_profile"
+if [[ "$build_profile" == "release" ]]; then
+	cargo_profile_arg=(--release)
+	cargo_profile_dir="release"
+else
+	cargo_profile_arg=(--profile "$build_profile")
+fi
+cargo_release_bin="$cargo_target_dir/$cargo_profile_dir/code"
 
 resolve_code_version() {
 	tr -d '[:space:]' <"$repo_root/VERSION"
@@ -28,6 +39,7 @@ restore_release_symlink_on_error() {
 }
 
 echo "Building release binary from $code_rs_root"
+echo "Using Cargo profile: $build_profile"
 if [[ -L "$release_bin" ]]; then
 	removed_release_symlink_target="$(readlink "$release_bin")"
 	trap restore_release_symlink_on_error EXIT
@@ -36,10 +48,10 @@ if [[ -L "$release_bin" ]]; then
 fi
 if [[ -n "$code_version" ]]; then
 	echo "Embedding CODE_VERSION=$code_version"
-	CODE_VERSION="$code_version" cargo build --manifest-path "$code_rs_root/Cargo.toml" -p code-cli --release
+	CODE_VERSION="$code_version" cargo build --manifest-path "$code_rs_root/Cargo.toml" -p code-cli "${cargo_profile_arg[@]}"
 else
 	echo "warning: could not resolve CODE_VERSION from VERSION; building without override" >&2
-	cargo build --manifest-path "$code_rs_root/Cargo.toml" -p code-cli --release
+	cargo build --manifest-path "$code_rs_root/Cargo.toml" -p code-cli "${cargo_profile_arg[@]}"
 fi
 trap - EXIT
 

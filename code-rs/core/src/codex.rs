@@ -168,6 +168,8 @@ fn to_proto_reasoning_effort(effort: ReasoningEffortConfig) -> ProtoReasoningEff
         ReasoningEffortConfig::Medium => ProtoReasoningEffort::Medium,
         ReasoningEffortConfig::High => ProtoReasoningEffort::High,
         ReasoningEffortConfig::XHigh => ProtoReasoningEffort::XHigh,
+        ReasoningEffortConfig::Max => ProtoReasoningEffort::Max,
+        ReasoningEffortConfig::Ultra => ProtoReasoningEffort::Ultra,
         ReasoningEffortConfig::None => ProtoReasoningEffort::Minimal,
     }
 }

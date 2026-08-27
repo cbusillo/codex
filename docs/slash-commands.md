@@ -63,7 +63,7 @@ Notes
 - `/verbosity (high|medium|low)`: change text verbosity.
 - `/model`: choose your default model.
 - `/fast`: open the model selector and toggle Fast mode.
-- `/reasoning (minimal|low|medium|high)`: change reasoning effort.
+- `/reasoning (minimal|low|medium|high|xhigh|max|ultra)`: change reasoning effort.
 - `/prompts`: manage custom prompts.
 - `/skills`: manage skills.
 - `/status`: show current session configuration and token usage.
@@ -120,7 +120,7 @@ Implementation Notes
   `code-rs/core/src/slash_commands.rs`.
   When no `[[agents]]` are configured, the orchestrator advertises the
   following agent/model selectors to the LLM for multi-agent runs: `code-gpt-5.5`,
-  `code-gpt-5.4`, `claude-opus-4.8`,
+  `code-gpt-5.4`, `claude-opus-5`, `claude-fable-5`,
   `antigravity`, `code-gpt-5.4-mini`, `claude-sonnet-4.6`,
   `claude-haiku-4.5`, and `qwen3-coder-plus` (with `cloud-gpt-5.1-codex-max`
   gated by `CODE_ENABLE_CLOUD_AGENT_MODEL`). You can replace or pin this set via

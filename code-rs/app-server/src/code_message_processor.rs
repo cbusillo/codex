@@ -2246,6 +2246,10 @@ fn map_reasoning_effort_to_wire(
         code_core::config_types::ReasoningEffort::XHigh => {
             code_protocol::config_types::ReasoningEffort::XHigh
         }
+        code_core::config_types::ReasoningEffort::Max => code_protocol::config_types::ReasoningEffort::Max,
+        code_core::config_types::ReasoningEffort::Ultra => {
+            code_protocol::config_types::ReasoningEffort::Ultra
+        }
         code_core::config_types::ReasoningEffort::None => {
             code_protocol::config_types::ReasoningEffort::Minimal
         }

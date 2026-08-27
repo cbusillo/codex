@@ -18,12 +18,14 @@ use super::bottom_pane_view::{BottomPaneView, ConditionalUpdate};
 use super::settings_panel::{PanelFrameStyle, render_panel};
 use super::BottomPane;
 
-const ROUTING_REASONING_LEVELS: [ReasoningEffort; 5] = [
+const ROUTING_REASONING_LEVELS: [ReasoningEffort; 7] = [
     ReasoningEffort::Minimal,
     ReasoningEffort::Low,
     ReasoningEffort::Medium,
     ReasoningEffort::High,
     ReasoningEffort::XHigh,
+    ReasoningEffort::Max,
+    ReasoningEffort::Ultra,
 ];
 
 const ROUTING_DESCRIPTION_MAX_CHARS: usize = 200;
@@ -370,6 +372,8 @@ impl AutoDriveSettingsView {
 
     fn reasoning_label(effort: ReasoningEffort) -> &'static str {
         match effort {
+            ReasoningEffort::Ultra => "Ultra",
+            ReasoningEffort::Max => "Max",
             ReasoningEffort::XHigh => "XHigh",
             ReasoningEffort::High => "High",
             ReasoningEffort::Medium => "Medium",

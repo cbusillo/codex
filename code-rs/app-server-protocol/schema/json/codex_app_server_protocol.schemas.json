@@ -7162,7 +7162,9 @@
         "low",
         "medium",
         "high",
-        "xhigh"
+        "xhigh",
+        "max",
+        "ultra"
       ],
       "type": "string"
     },
@@ -14022,7 +14024,9 @@
           "low",
           "medium",
           "high",
-          "xhigh"
+          "xhigh",
+          "max",
+          "ultra"
         ],
         "type": "string"
       },

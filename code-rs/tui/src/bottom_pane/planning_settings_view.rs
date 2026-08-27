@@ -130,6 +130,8 @@ impl PlanningSettingsView {
 
     fn reasoning_label(effort: ReasoningEffort) -> &'static str {
         match effort {
+            ReasoningEffort::Ultra => "Ultra",
+            ReasoningEffort::Max => "Max",
             ReasoningEffort::XHigh => "XHigh",
             ReasoningEffort::High => "High",
             ReasoningEffort::Medium => "Medium",

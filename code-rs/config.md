@@ -476,6 +476,9 @@ Code includes built-in support for these agents:
 
 - **code/codex** - Built-in Code CLI agents (use current executable)
 - **claude** - Claude AI assistant (requires `claude` CLI)
+- **claude-fable-5** - Very expensive Claude specialist; use only when the
+  user explicitly requests Fable or as a last resort after other capable agents
+  fail on a genuinely difficult problem
 - **antigravity** - Google Antigravity (requires `agy` CLI; uses Antigravity's configured model)
 - **qwen** - Qwen AI assistant (requires `qwen` CLI)
 - **cloud** - Cloud-based agents (optional, gated by `CODE_ENABLE_CLOUD_AGENT_MODEL`)

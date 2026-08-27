@@ -906,7 +906,16 @@ pub(crate) fn create_reasoning_param_for_request(
         Some(summary)
     };
 
+    let effort = effort.map(reasoning_effort_for_request);
+
     Some(Reasoning { effort, summary })
+}
+
+fn reasoning_effort_for_request(effort: ReasoningEffortConfig) -> ReasoningEffortConfig {
+    match effort {
+        ReasoningEffortConfig::Ultra => ReasoningEffortConfig::Max,
+        effort => effort,
+    }
 }
 
 // Removed legacy TextControls helper; use `Text` with `OpenAiTextVerbosity` instead.
@@ -932,6 +941,18 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
+
+    #[test]
+    fn ultra_reasoning_uses_max_for_requests() {
+        assert_eq!(
+            reasoning_effort_for_request(ReasoningEffortConfig::Ultra),
+            ReasoningEffortConfig::Max
+        );
+        assert_eq!(
+            reasoning_effort_for_request(ReasoningEffortConfig::Max),
+            ReasoningEffortConfig::Max
+        );
+    }
 
     fn message(role: &str, text: &str) -> ResponseItem {
         ResponseItem::Message {
